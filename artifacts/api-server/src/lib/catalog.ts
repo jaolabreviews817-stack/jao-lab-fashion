@@ -73,7 +73,7 @@ export const products: Product[] = [
     images: [
       image("photo-1539109136881-3be0616acf4b"),
       image("photo-1515886657613-9f3515b0c78f"),
-      image("photo-1506629905607-d9f297d5a04f"),
+      image("photo-1496747611176-843222e1e57c"),
     ],
     sizes: ["XS", "S", "M", "L", "XL"],
     colors: ["Obsidian", "Clay"],
