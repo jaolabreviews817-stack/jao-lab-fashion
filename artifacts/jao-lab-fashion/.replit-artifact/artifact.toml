@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "JAO LAB Fashion & Styles"
+description = "A premium Nigerian fashion and lifestyle storefront with product discovery, wishlist, cart, checkout, customer accounts, order tracking, installment payments, and a protected admin foundation."
+version = "1.0.0"
+id = "artifacts/jao-lab-fashion"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22364
+
+[services.development]
+run = "pnpm --filter @workspace/jao-lab-fashion run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jao-lab-fashion", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jao-lab-fashion/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22364"
+BASE_PATH = "/"

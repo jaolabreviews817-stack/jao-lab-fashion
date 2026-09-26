@@ -1,6 +1,6 @@
-# [Project name]
+# JAO LAB Fashion & Styles
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+JAO LAB is a premium Nigerian fashion and lifestyle storefront with product discovery, wishlist, cart, checkout, installment messaging, customer order tracking, and an admin summary foundation.
 
 ## Run & Operate
 
@@ -22,23 +22,31 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/jao-lab-fashion/src/App.tsx` — customer storefront routes and interaction state
+- `artifacts/jao-lab-fashion/src/index.css` — JAO LAB visual tokens and responsive styles
+- `lib/api-spec/openapi.yaml` — source of truth for catalog, wishlist, order, and admin contracts
+- `artifacts/api-server/src/lib/catalog.ts` — realistic first-build catalog and sample order data
+- `artifacts/api-server/src/routes/store.ts` — API handlers for storefront and admin summary surfaces
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The web app uses generated OpenAPI hooks so a persistent database and auth provider can replace the sample API without changing the product surface.
+- Guest cart and theme presentation state stay local for the first build; catalog, wishlist, order, and admin data flow through API hooks.
+- Prices are represented as Nigerian Naira amounts throughout the contract and UI.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Mobile-first shopping experience with responsive desktop layouts.
+- Storefront discovery, filters, search, product variants, wishlist, cart, checkout, installment messaging, account, order history, tracking, auth screens, brand pages, and admin summary.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+No additional preferences recorded.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run `pnpm --filter @workspace/api-spec run codegen` after any OpenAPI contract change.
+- The API server currently uses in-memory sample data so the first build is immediately usable; persistent auth, storage, payments, and database wiring are the next production layer.
 
 ## Pointers
 

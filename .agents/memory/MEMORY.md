@@ -1,0 +1,1 @@
+- [Generated client typing](jao-lab-workspace.md) — Keep DOM.Iterable enabled for generated fetch-client Headers.entries typing.

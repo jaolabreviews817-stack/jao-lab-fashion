@@ -1,0 +1,153 @@
+Build a complete, professional fashion and lifestyle e-commerce app called JAO LAB Fashion & Styles.
+
+The app must be designed mobile-first but also work beautifully on desktop web.
+
+IMPORTANT:
+- Build the project with a technology stack that supports BOTH a web app and future native Android + iOS apps from the same codebase.
+- Use a clean, scalable architecture so we can add a real backend/database later.
+- Do not create a simple demo or landing page. Build the foundation of a real e-commerce application.
+- Use Nigerian Naira (₦) for all prices.
+- Make the interface modern, premium, stylish and professional, with a dark fashion-editorial aesthetic.
+- Brand name: JAO LAB
+- Full name: JAO LAB Fashion & Styles.
+
+CORE SCREENS:
+1. Home
+2. Shop
+3. Categories
+4. Product details
+5. Search
+6. Wishlist
+7. Cart
+8. Checkout
+9. Customer account
+10. Orders
+11. Order tracking
+12. Login
+13. Sign up
+14. About Us
+15. Contact Us
+16. Admin dashboard
+
+FASHION CATEGORIES:
+Men
+Women
+Footwear
+Bags
+Accessories
+Jewelry
+Beauty
+Lifestyle
+New Arrivals
+Sale
+
+PRODUCT SYSTEM:
+Each product should support:
+- Multiple images
+- Product name
+- Description
+- Category/subcategory
+- Price
+- Discount price
+- Available sizes
+- Available colours
+- Stock quantity
+- Product tags
+- Featured/new/trending status
+- Full payment price
+- Installment availability
+
+SHOPPING:
+- Add to cart
+- Change quantity
+- Remove from cart
+- Wishlist
+- Search products
+- Filter by category
+- Filter by price
+- Sort products
+- Product image gallery
+- Related products
+
+CHECKOUT:
+Customers should be able to enter:
+- Full name
+- Phone number
+- Email
+- State
+- City
+- Full delivery address
+- Delivery notes
+
+Payment should support:
+- Full payment
+- Installment payment
+
+For installment purchases, clearly show the payment schedule and amount remaining.
+An installment order must NOT be released for fulfilment until the customer has completed all required payments.
+
+PAYMENT VERIFICATION:
+Include a bank-transfer payment option where the customer can upload a payment receipt/screenshot.
+The admin must be able to review the receipt and mark the payment as verified or rejected.
+
+CUSTOMER ACCOUNTS:
+- Email/phone + password registration
+- Login/logout
+- Profile
+- Saved delivery addresses
+- Wishlist
+- Order history
+- Installment payment history
+- Remaining balance
+- Order status
+
+ORDER STATUSES:
+Pending
+Payment verification
+Confirmed
+Processing
+Shipped
+Out for delivery
+Delivered
+Cancelled
+
+TRACKING:
+Create a professional order-tracking screen showing the progress of an order through the above stages.
+
+ADMIN:
+Create a protected admin dashboard.
+The admin must be able to:
+- Add products
+- Edit products
+- Delete products
+- Manage stock
+- Manage categories
+- View customers
+- View orders
+- View payment receipts
+- Verify/reject payments
+- Update order status
+- Manage installment orders
+- View outstanding installment balances
+
+Do NOT display an obvious admin button on the customer homepage.
+The admin area must be accessible through a protected admin route.
+
+DESIGN:
+- Premium dark fashion aesthetic
+- Clean typography
+- Large fashion imagery
+- Smooth animations
+- Elegant product cards
+- Responsive layout
+- Excellent mobile navigation
+- Bottom navigation on mobile
+- Desktop navigation on larger screens
+- Dark/light theme switcher
+- Professional empty states, loading states and error states
+- Do not use the default Replit branding anywhere in the customer-facing app.
+
+IMPORTANT DEVELOPMENT RULE:
+Build the application in a modular way. Start with the complete frontend experience and realistic sample products/data, but structure everything so we can connect Supabase for real authentication, database, product storage, orders and payments later.
+
+Before finishing, make sure the app runs successfully and the main navigation works without errors.
