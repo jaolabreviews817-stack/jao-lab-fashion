@@ -5,10 +5,12 @@
  * JAO LAB Fashion & Styles commerce API
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderInstallmentFrequency } from './orderInstallmentFrequency';
 import type { OrderItem } from './orderItem';
 import type { OrderPaymentMethod } from './orderPaymentMethod';
 import type { OrderStatus } from './orderStatus';
 import type { OrderTimelineItem } from './orderTimelineItem';
+import type { PaymentHistoryItem } from './paymentHistoryItem';
 
 export interface Order {
   id: string;
@@ -17,9 +19,14 @@ export interface Order {
   paid: number;
   remaining: number;
   paymentMethod: OrderPaymentMethod;
+  /** @nullable */
+  installmentFrequency: OrderInstallmentFrequency;
   status: OrderStatus;
   createdAt: string;
   expectedDelivery: string;
   address: string;
+  /** @nullable */
+  nextPayment: string | null;
+  paymentHistory: PaymentHistoryItem[];
   timeline: OrderTimelineItem[];
 }

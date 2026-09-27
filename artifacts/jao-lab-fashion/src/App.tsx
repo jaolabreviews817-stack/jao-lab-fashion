@@ -12,10 +12,16 @@ import {
 import {
   useAddWishlistItem, useCreateOrder, useGetAdminSummary, useGetHome, useGetOrder,
   useGetProduct, useGetWishlist, useListCategories, useListOrders, useListProducts,
-  useRemoveWishlistItem,
+  useRemoveWishlistItem, useGetCart, useReplaceCart, useClearCart, useGetProfile,
+  useUpdateProfile,
 } from '@workspace/api-client-react';
 import type { Category, Order, OrderInput, Product } from '@workspace/api-client-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
+import { useAuth, AuthProvider } from '@/lib/auth';
+import { contactConfig } from '@/config/contact';
+import { AccountPage, ContactPage, LoginPage } from '@/components/customer-pages';
+import { AdminPage } from '@/components/admin-page';
+import { useCart, type CartLine } from '@/lib/cart';
 
 const queryClient = new QueryClient();
 const money = (n: number) => `₦${Math.round(n).toLocaleString('en-NG')}`;
@@ -25,34 +31,6 @@ const fallbackImages = [
   'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&q=85',
 ];
 const img = (p: Product | Category, index = 0) => (p as Product).image || fallbackImages[index % fallbackImages.length];
-
-type CartLine = { product: Product; quantity: number; size?: string; color?: string };
-
-function useCart() {
-  const [cart, setCart] = useState<CartLine[]>(() => {
-    try { return JSON.parse(localStorage.getItem('jao-cart') || '[]'); } catch { return []; }
-  });
-  useEffect(() => {
-    const sync = () => { try { setCart(JSON.parse(localStorage.getItem('jao-cart') || '[]')); } catch { setCart([]); } };
-    window.addEventListener('jao-cart-change', sync);
-    return () => window.removeEventListener('jao-cart-change', sync);
-  }, []);
-  const setAndPersist = (next: CartLine[]) => {
-    setCart(next);
-    localStorage.setItem('jao-cart', JSON.stringify(next));
-    window.dispatchEvent(new Event('jao-cart-change'));
-  };
-  const add = (product: Product, size?: string, color?: string) => {
-    const current = cart;
-    const key = `${product.id}-${size || ''}-${color || ''}`;
-    const found = current.find((l) => `${l.product.id}-${l.size || ''}-${l.color || ''}` === key);
-    setAndPersist(found ? current.map((l) => l === found ? { ...l, quantity: l.quantity + 1 } : l) : [...current, { product, quantity: 1, size, color }]);
-  };
-  const update = (index: number, quantity: number) => setAndPersist(quantity < 1 ? cart.filter((_, i) => i !== index) : cart.map((l, i) => i === index ? { ...l, quantity } : l));
-  const remove = (index: number) => setAndPersist(cart.filter((_, i) => i !== index));
-  const clear = () => setAndPersist([]);
-  return { cart, add, update, remove, clear, count: cart.reduce((a, l) => a + l.quantity, 0), total: cart.reduce((a, l) => a + l.quantity * l.product.price, 0) };
-}
 
 function useNotice() {
   const [notice, setNotice] = useState('');
@@ -70,12 +48,25 @@ function Empty({ title, copy, action }: { title: string; copy: string; action?: 
   return <div className="mx-auto my-16 max-w-md text-center"><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-secondary/40 text-primary"><Sparkles size={22} /></div><h3 className="font-display text-3xl">{title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>{action}</div>;
 }
 
+type ThemePreference = 'dark' | 'light' | 'system';
+const systemPrefersDark = () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { count } = useCart();
   const [mobile, setMobile] = useState(false);
-  const [dark, setDark] = useState(() => localStorage.getItem('jao-theme') === 'dark');
-  useEffect(() => { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('jao-theme', dark ? 'dark' : 'light'); }, [dark]);
+  const [theme, setTheme] = useState<ThemePreference>(() => {
+    const saved = localStorage.getItem('jao-theme');
+    return saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'system';
+  });
+  useEffect(() => {
+    const apply = () => document.documentElement.classList.toggle('dark', theme === 'dark' || (theme === 'system' && systemPrefersDark()));
+    apply();
+    localStorage.setItem('jao-theme', theme);
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [theme]);
   const nav = [['Shop', '/shop'], ['Categories', '/categories'], ['About', '/about'], ['Contact', '/contact']];
   return <div className="grain min-h-[100dvh] bg-background">
     <div className="overflow-hidden bg-primary py-2 text-center text-[10px] font-bold uppercase tracking-[.22em] text-primary-foreground"><div className="marquee flex w-max gap-16"><span>Complimentary Lagos delivery on orders over ₦150,000</span><span>Split your purchase in three with JAO PLAN</span><span>Complimentary Lagos delivery on orders over ₦150,000</span><span>Split your purchase in three with JAO PLAN</span></div></div>
@@ -84,12 +75,12 @@ function Shell({ children }: { children: ReactNode }) {
         <button className="md:hidden" data-testid="button-open-menu" onClick={() => setMobile(!mobile)} aria-label="Open menu">{mobile ? <X size={21} /> : <Menu size={21} />}</button>
         <Link href="/" data-testid="link-home" className="group flex items-center gap-2"><span className="font-display text-[27px] font-bold tracking-[-.06em]">JAO<span className="text-accent">.</span></span><span className="hidden border-l border-foreground/20 pl-2 font-mono text-[8px] uppercase leading-3 tracking-[.22em] text-muted-foreground sm:block">Lab<br />Fashion & Styles</span></Link>
         <nav className="hidden items-center gap-7 md:flex">{nav.map(([label, href]) => <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} className={`text-[11px] font-bold uppercase tracking-[.14em] transition-colors hover:text-accent ${location === href ? 'text-accent' : ''}`}>{label}</Link>)}</nav>
-        <div className="flex items-center gap-3"><Link href="/search" data-testid="link-search" className="rounded-full p-2 hover:bg-muted"><Search size={18} strokeWidth={1.8} /></Link><button onClick={() => setDark(!dark)} data-testid="button-toggle-theme" className="hidden rounded-full p-2 text-muted-foreground hover:bg-muted sm:block">{dark ? '☼' : '◐'}</button><Link href="/account" data-testid="link-account" className="hidden rounded-full p-2 hover:bg-muted sm:block"><UserRound size={18} strokeWidth={1.8} /></Link><Link href="/cart" data-testid="link-cart" className="relative rounded-full p-2 hover:bg-muted"><ShoppingBag size={18} strokeWidth={1.8} />{count > 0 && <span data-testid="text-cart-count" className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[9px] font-bold text-accent-foreground">{count}</span>}</Link></div>
+        <div className="flex items-center gap-3"><Link href="/search" data-testid="link-search" className="rounded-full p-2 hover:bg-muted"><Search size={18} strokeWidth={1.8} /></Link><select aria-label="Theme" data-testid="select-theme" value={theme} onChange={(e) => setTheme(e.target.value as ThemePreference)} className="hidden rounded-full border border-border bg-transparent px-2 py-1 text-[9px] uppercase tracking-wider outline-none sm:block"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><Link href="/account" data-testid="link-account" className="hidden rounded-full p-2 hover:bg-muted sm:block"><UserRound size={18} strokeWidth={1.8} /></Link><Link href="/cart" data-testid="link-cart" className="relative rounded-full p-2 hover:bg-muted"><ShoppingBag size={18} strokeWidth={1.8} />{count > 0 && <span data-testid="text-cart-count" className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[9px] font-bold text-accent-foreground">{count}</span>}</Link></div>
       </div>
       {mobile && <div className="border-t border-border bg-card px-5 py-5 md:hidden">{nav.map(([label, href]) => <Link key={href} onClick={() => setMobile(false)} href={href} className="block border-b border-border/60 py-3 text-xs font-bold uppercase tracking-[.16em]">{label}</Link>)}<Link href="/account" className="block py-3 text-xs font-bold uppercase tracking-[.16em]">Account</Link></div>}
     </header>
     <main className="mx-auto max-w-[1440px] px-5 pb-24 md:px-10">{children}</main>
-     <footer className="bg-primary px-5 py-14 text-primary-foreground md:px-10"><div className="mx-auto grid max-w-[1440px] gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]"><div><div className="font-display text-4xl tracking-[-.05em]">JAO<span className="text-secondary">.</span></div><p className="mt-4 max-w-xs text-sm leading-6 text-primary-foreground/65">A considered wardrobe for the way Lagos moves. Independent labels, tactile essentials, and a slower approach to buying well.</p><div className="mt-6 flex gap-3"><a href="https://instagram.com" data-testid="link-instagram" className="rounded-full border border-primary-foreground/20 p-2 hover:bg-primary-foreground/10"><Instagram size={16} /></a><a href="mailto:hello@jaolab.com" data-testid="link-email" className="rounded-full border border-primary-foreground/20 p-2 hover:bg-primary-foreground/10"><Mail size={16} /></a></div></div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Explore</p>{[['Shop','/shop'],['Categories','/categories'],['Wishlist','/wishlist'],['Orders','/orders']].map(([l,h]) => <Link key={h} href={h} className="block py-1.5 text-sm text-primary-foreground/75 hover:text-secondary">{l}</Link>)}</div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Studio</p>{[['Our story','/about'],['Contact','/contact'],['Account','/account']].map(([l,h]) => <Link key={h} href={h} className="block py-1.5 text-sm text-primary-foreground/75 hover:text-secondary">{l}</Link>)}</div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Lagos, Nigeria</p><p className="text-sm leading-6 text-primary-foreground/75">Victoria Island<br />Mon–Sat, 9:00–18:00<br />hello@jaolab.com</p></div></div><div className="mx-auto mt-14 max-w-[1440px] border-t border-primary-foreground/15 pt-5 font-mono text-[9px] uppercase tracking-[.16em] text-primary-foreground/45">© 2024 JAO LAB Fashion & Styles · Made for a life in motion</div></footer>
+     <footer className="bg-primary px-5 py-14 text-primary-foreground md:px-10"><div className="mx-auto grid max-w-[1440px] gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]"><div><div className="font-display text-4xl tracking-[-.05em]">JAO<span className="text-secondary">.</span></div><p className="mt-4 max-w-xs text-sm leading-6 text-primary-foreground/65">A considered wardrobe for the way Lagos moves. Independent labels, tactile essentials, and a slower approach to buying well.</p><div className="mt-6 flex gap-3">{contactConfig.whatsappUrl && <a href={contactConfig.whatsappUrl} data-testid="link-whatsapp" className="rounded-full border border-primary-foreground/20 p-2 hover:bg-primary-foreground/10" aria-label="WhatsApp">WA</a>}{contactConfig.email && <a href={`mailto:${contactConfig.email}`} data-testid="link-email" className="rounded-full border border-primary-foreground/20 p-2 hover:bg-primary-foreground/10"><Mail size={16} /></a>}</div></div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Explore</p>{[['Shop','/shop'],['Categories','/categories'],['Wishlist','/wishlist'],['Orders','/orders']].map(([l,h]) => <Link key={h} href={h} className="block py-1.5 text-sm text-primary-foreground/75 hover:text-secondary">{l}</Link>)}</div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Studio</p>{[['Our story','/about'],['Contact','/contact'],['Account','/account']].map(([l,h]) => <Link key={h} href={h} className="block py-1.5 text-sm text-primary-foreground/75 hover:text-secondary">{l}</Link>)}</div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Contact</p><div className="space-y-1.5 text-sm leading-6 text-primary-foreground/75">{contactConfig.location && <p>{contactConfig.location}</p>}{contactConfig.hours && <p>{contactConfig.hours}</p>}{contactConfig.phone && <a href={`tel:${contactConfig.phone}`} className="block hover:text-secondary">{contactConfig.phone}</a>}{!contactConfig.location && !contactConfig.hours && !contactConfig.phone && !contactConfig.email && <p>Contact details will be added by the studio.</p>}</div></div></div><div className="mx-auto mt-14 max-w-[1440px] border-t border-primary-foreground/15 pt-5 font-mono text-[9px] uppercase tracking-[.16em] text-primary-foreground/45">© 2024 JAO LAB Fashion & Styles · Made for a life in motion</div></footer>
     <div className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-md md:hidden"><Link href="/" data-testid="mobile-home" className={`rounded-full p-3 ${location === '/' ? 'bg-primary text-primary-foreground' : ''}`}><HomeIcon size={17} /></Link><Link href="/shop" data-testid="mobile-shop" className={`rounded-full p-3 ${location === '/shop' ? 'bg-primary text-primary-foreground' : ''}`}><Search size={17} /></Link><Link href="/wishlist" data-testid="mobile-wishlist" className={`rounded-full p-3 ${location === '/wishlist' ? 'bg-primary text-primary-foreground' : ''}`}><Heart size={17} /></Link><Link href="/account" data-testid="mobile-account" className={`rounded-full p-3 ${location === '/account' ? 'bg-primary text-primary-foreground' : ''}`}><UserRound size={17} /></Link></div>
   </div>;
 }
@@ -99,13 +90,16 @@ function SectionHeading({ eyebrow, title, action }: { eyebrow: string; title: st
 }
 
 function ProductCard({ product, index = 0, onNotice }: { product: Product; index?: number; onNotice?: (s: string) => void }) {
-  const wishlist = useGetWishlist();
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const wishlist = useGetWishlist({ query: { queryKey: ['wishlist'], enabled: !!user } });
   const addWish = useAddWishlistItem();
   const removeWish = useRemoveWishlistItem();
   const client = useQueryClient();
   const cart = useCart();
   const saved = !!wishlist.data?.some((p) => p.id === product.id);
   const toggle = () => {
+    if (!user) { navigate('/login'); return; }
     const action = saved ? removeWish : addWish;
     action.mutate({ productId: product.id }, { onSuccess: (data) => { client.setQueryData(wishlist.queryKey, data); onNotice?.(saved ? 'Removed from wishlist' : 'Saved to wishlist'); } });
   };
@@ -114,6 +108,13 @@ function ProductCard({ product, index = 0, onNotice }: { product: Product; index
     <div className="flex items-start justify-between gap-3 pt-4"><div><p className="font-mono text-[9px] uppercase tracking-[.17em] text-muted-foreground">{product.category}</p><Link href={`/product/${product.id}`} className="mt-1 block font-display text-[19px] leading-tight hover:text-accent">{product.name}</Link></div><p data-testid={`text-price-${product.id}`} className="whitespace-nowrap pt-1 font-mono text-[11px]">{money(product.price)}</p></div>
     <button data-testid={`button-quick-add-${product.id}`} onClick={() => { cart.add(product, product.sizes?.[0], product.colors?.[0]); onNotice?.('Added to bag'); }} className="mt-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.17em] text-primary opacity-70 transition group-hover:opacity-100">Quick add <ArrowUpRight size={13} /></button>
   </article>;
+}
+
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <Loading label="Opening your account" />;
+  if (!user) return <Empty title="This space is personal." copy="Sign in to view your saved pieces, orders, and delivery details." action={<Link href="/login" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Sign in</Link>} />;
+  return <>{children}</>;
 }
 
 function Home() {
@@ -178,8 +179,8 @@ function Contact() { const [sent, setSent] = useState(false); return <div classN
 
 function Admin() { const { data, isLoading, isError, refetch } = useGetAdminSummary(); if (isLoading) return <Loading label="Loading studio report" />; if (isError || !data) return <QueryError onRetry={() => refetch()} />; const stats = [['Revenue', money(data.revenue), `${data.revenueChange > 0 ? '+' : ''}${data.revenueChange}% this month`],['Pending orders', data.pendingOrders, 'Need attention'],['Customers', data.customers, 'Across the studio'],['Low stock', data.lowStock, 'Pieces to watch']]; return <div className="py-10 md:py-16"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Private / Studio report</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em] md:text-8xl">Good morning.</h1></div><span className="flex items-center gap-2 rounded-full bg-secondary px-4 py-2 font-mono text-[10px] uppercase tracking-wider"><Sparkles size={13} /> Live summary</span></div><div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{stats.map(([label,value,copy]) => <div key={label} className="rounded-xl border border-border p-5"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p><p data-testid={`admin-${label}`} className="mt-7 font-display text-4xl">{value}</p><p className="mt-2 text-xs text-accent">{copy}</p></div>)}</div><div className="mt-12 grid gap-8 lg:grid-cols-[1fr_.65fr]"><div><div className="mb-5 flex items-center justify-between"><h2 className="font-display text-3xl">Recent orders</h2><Link href="/orders" className="font-mono text-[10px] uppercase tracking-widest text-accent">View all</Link></div><div className="space-y-2">{data.recentOrders.map((o) => <Link key={o.id} href={`/orders/${o.id}`} className="flex items-center justify-between rounded-lg border border-border p-4 hover:border-accent"><div><p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{o.id}</p><p className="mt-1 font-display text-xl">{o.items.length} pieces</p></div><div className="text-right"><p className="font-mono text-xs">{money(o.total)}</p><p className="mt-1 text-[10px] uppercase text-accent">{o.status.replaceAll('-', ' ')}</p></div></Link>)}</div></div><div className="rounded-xl bg-primary p-6 text-primary-foreground"><p className="font-mono text-[10px] uppercase tracking-widest text-secondary">Installments</p><p className="mt-10 font-display text-5xl">{money(data.outstandingInstallments)}</p><p className="mt-2 text-sm text-primary-foreground/65">Outstanding across active JAO PLAN orders.</p><Link href="/orders" className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-secondary">Review orders <ArrowUpRight size={13} /></Link></div></div></div>; }
 
-function Router() { const [location] = useLocation(); return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/shop" component={() => <Shop />} /><Route path="/categories" component={Categories} /><Route path="/product/:id" component={ProductPage} /><Route path="/search" component={() => <Shop search />} /><Route path="/wishlist" component={Wishlist} /><Route path="/cart" component={Cart} /><Route path="/checkout" component={Checkout} /><Route path="/account" component={Account} /><Route path="/orders" component={Orders} /><Route path="/orders/:id" component={OrderDetail} /><Route path="/login" component={() => <Login />} /><Route path="/signup" component={() => <Login signup />} /><Route path="/about" component={About} /><Route path="/contact" component={Contact} /><Route path="/admin" component={Admin} /><Route component={() => <Empty title="Page not found." copy="This corner of the studio does not exist." action={<Link href="/" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Return home</Link>} />} /></Switch></ErrorBoundary>; }
+function Router() { const [location] = useLocation(); return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/shop" component={() => <Shop />} /><Route path="/categories" component={Categories} /><Route path="/product/:id" component={ProductPage} /><Route path="/search" component={() => <Shop search />} /><Route path="/wishlist" component={() => <RequireAuth><Wishlist /></RequireAuth>} /><Route path="/cart" component={Cart} /><Route path="/checkout" component={() => <RequireAuth><Checkout /></RequireAuth>} /><Route path="/account" component={() => <RequireAuth><AccountPage /></RequireAuth>} /><Route path="/orders" component={() => <RequireAuth><Orders /></RequireAuth>} /><Route path="/orders/:id" component={() => <RequireAuth><OrderDetail /></RequireAuth>} /><Route path="/login" component={() => <LoginPage />} /><Route path="/signup" component={() => <LoginPage signup />} /><Route path="/about" component={About} /><Route path="/contact" component={ContactPage} /><Route path="/admin" component={() => <RequireAuth><AdminPage /></RequireAuth>} /><Route component={() => <Empty title="Page not found." copy="This corner of the studio does not exist." action={<Link href="/" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Return home</Link>} />} /></Switch></ErrorBoundary>; }
 
-function App() { return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Shell><Router /></Shell></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>; }
+function App() { return <QueryClientProvider client={queryClient}><AuthProvider><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Shell><Router /></Shell></WouterRouter><Toaster /></TooltipProvider></AuthProvider></QueryClientProvider>; }
 
 export default App;

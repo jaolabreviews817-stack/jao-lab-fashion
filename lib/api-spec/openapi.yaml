@@ -218,6 +218,85 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Order"
+  /profile:
+    get:
+      operationId: getProfile
+      tags: [commerce]
+      summary: Get the current customer's profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+    patch:
+      operationId: updateProfile
+      tags: [commerce]
+      summary: Update the current customer's profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileInput"
+      responses:
+        "200":
+          description: Updated customer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /cart:
+    get:
+      operationId: getCart
+      tags: [commerce]
+      summary: Get the current customer's cart
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Customer cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+    put:
+      operationId: replaceCart
+      tags: [commerce]
+      summary: Replace the current customer's cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartInput"
+      responses:
+        "200":
+          description: Updated customer cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+    delete:
+      operationId: clearCart
+      tags: [commerce]
+      summary: Clear the current customer's cart
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Empty customer cart
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
   /admin/summary:
     get:
       operationId: getAdminSummary
@@ -231,6 +310,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminSummary"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     HealthStatus:
       type: object
@@ -257,6 +341,78 @@ components:
         image:
           type: string
       required: [id, name, count, image]
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        fullName:
+          type: string
+        phone:
+          type: string
+        state:
+          type: string
+        city:
+          type: string
+        address:
+          type: string
+      required: [id, email, fullName, phone, state, city, address]
+    ProfileInput:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        state:
+          type: string
+        city:
+          type: string
+        address:
+          type: string
+      required: [fullName, phone, state, city, address]
+    CartItemInput:
+      type: object
+      properties:
+        productId:
+          type: string
+        quantity:
+          type: integer
+        size:
+          type: string
+        color:
+          type: string
+      required: [productId, quantity, size, color]
+    CartLine:
+      type: object
+      properties:
+        product:
+          $ref: "#/components/schemas/Product"
+        quantity:
+          type: integer
+        size:
+          type: string
+        color:
+          type: string
+      required: [product, quantity, size, color]
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartLine"
+      required: [items]
+    CartInput:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItemInput"
+      required: [items]
     Product:
       type: object
       properties:
@@ -377,6 +533,9 @@ components:
         paymentMethod:
           type: string
           enum: [full, installment, bank-transfer]
+        installmentFrequency:
+          type: ["string", "null"]
+          enum: [weekly, monthly, null]
         status:
           type: string
           enum: [pending, payment-verification, confirmed, processing, shipped, out-for-delivery, delivered, cancelled]
@@ -386,11 +545,29 @@ components:
           type: string
         address:
           type: string
+        nextPayment:
+          type: ["string", "null"]
+        paymentHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentHistoryItem"
         timeline:
           type: array
           items:
             $ref: "#/components/schemas/OrderTimelineItem"
-      required: [id, items, total, paid, remaining, paymentMethod, status, createdAt, expectedDelivery, address, timeline]
+      required: [id, items, total, paid, remaining, paymentMethod, installmentFrequency, status, createdAt, expectedDelivery, address, nextPayment, paymentHistory, timeline]
+    PaymentHistoryItem:
+      type: object
+      properties:
+        amount:
+          type: number
+        date:
+          type: string
+        status:
+          type: string
+        reference:
+          type: string
+      required: [amount, date, status, reference]
     OrderTimelineItem:
       type: object
       properties:
@@ -427,6 +604,9 @@ components:
         paymentMethod:
           type: string
           enum: [full, installment, bank-transfer]
+        installmentFrequency:
+          type: ["string", "null"]
+          enum: [weekly, monthly, null]
       required: [items, fullName, phone, email, state, city, address, notes, paymentMethod]
     AdminSummary:
       type: object

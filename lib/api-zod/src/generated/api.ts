@@ -250,10 +250,18 @@ export const ListOrdersResponseItem = zod.object({
   "paid": zod.number(),
   "remaining": zod.number(),
   "paymentMethod": zod.enum(['full', 'installment', 'bank-transfer']),
+  "installmentFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal(null)]).nullable(),
   "status": zod.enum(['pending', 'payment-verification', 'confirmed', 'processing', 'shipped', 'out-for-delivery', 'delivered', 'cancelled']),
   "createdAt": zod.string(),
   "expectedDelivery": zod.string(),
   "address": zod.string(),
+  "nextPayment": zod.string().nullable(),
+  "paymentHistory": zod.array(zod.object({
+  "amount": zod.number(),
+  "date": zod.string(),
+  "status": zod.string(),
+  "reference": zod.string()
+})),
   "timeline": zod.array(zod.object({
   "label": zod.string(),
   "date": zod.string().nullable(),
@@ -284,7 +292,8 @@ export const CreateOrderBody = zod.object({
   "city": zod.string(),
   "address": zod.string(),
   "notes": zod.string(),
-  "paymentMethod": zod.enum(['full', 'installment', 'bank-transfer'])
+  "paymentMethod": zod.enum(['full', 'installment', 'bank-transfer']),
+  "installmentFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal(null)]).nullable()
 })
 
 export const CreateOrderResponse = zod.object({
@@ -302,10 +311,18 @@ export const CreateOrderResponse = zod.object({
   "paid": zod.number(),
   "remaining": zod.number(),
   "paymentMethod": zod.enum(['full', 'installment', 'bank-transfer']),
+  "installmentFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal(null)]).nullable(),
   "status": zod.enum(['pending', 'payment-verification', 'confirmed', 'processing', 'shipped', 'out-for-delivery', 'delivered', 'cancelled']),
   "createdAt": zod.string(),
   "expectedDelivery": zod.string(),
   "address": zod.string(),
+  "nextPayment": zod.string().nullable(),
+  "paymentHistory": zod.array(zod.object({
+  "amount": zod.number(),
+  "date": zod.string(),
+  "status": zod.string(),
+  "reference": zod.string()
+})),
   "timeline": zod.array(zod.object({
   "label": zod.string(),
   "date": zod.string().nullable(),
@@ -337,15 +354,164 @@ export const GetOrderResponse = zod.object({
   "paid": zod.number(),
   "remaining": zod.number(),
   "paymentMethod": zod.enum(['full', 'installment', 'bank-transfer']),
+  "installmentFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal(null)]).nullable(),
   "status": zod.enum(['pending', 'payment-verification', 'confirmed', 'processing', 'shipped', 'out-for-delivery', 'delivered', 'cancelled']),
   "createdAt": zod.string(),
   "expectedDelivery": zod.string(),
   "address": zod.string(),
+  "nextPayment": zod.string().nullable(),
+  "paymentHistory": zod.array(zod.object({
+  "amount": zod.number(),
+  "date": zod.string(),
+  "status": zod.string(),
+  "reference": zod.string()
+})),
   "timeline": zod.array(zod.object({
   "label": zod.string(),
   "date": zod.string().nullable(),
   "complete": zod.boolean(),
   "current": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Get the current customer's profile
+ */
+export const GetProfileResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "fullName": zod.string(),
+  "phone": zod.string(),
+  "state": zod.string(),
+  "city": zod.string(),
+  "address": zod.string()
+})
+
+
+/**
+ * @summary Update the current customer's profile
+ */
+export const UpdateProfileBody = zod.object({
+  "fullName": zod.string(),
+  "phone": zod.string(),
+  "state": zod.string(),
+  "city": zod.string(),
+  "address": zod.string()
+})
+
+export const UpdateProfileResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "fullName": zod.string(),
+  "phone": zod.string(),
+  "state": zod.string(),
+  "city": zod.string(),
+  "address": zod.string()
+})
+
+
+/**
+ * @summary Get the current customer's cart
+ */
+export const GetCartResponse = zod.object({
+  "items": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "price": zod.number(),
+  "compareAtPrice": zod.number().nullable(),
+  "image": zod.string(),
+  "images": zod.array(zod.string()),
+  "sizes": zod.array(zod.string()),
+  "colors": zod.array(zod.string()),
+  "stock": zod.number().int(),
+  "tags": zod.array(zod.string()),
+  "featured": zod.boolean(),
+  "newest": zod.boolean(),
+  "trending": zod.boolean(),
+  "installmentAvailable": zod.boolean(),
+  "installmentAmount": zod.number().nullable()
+}),
+  "quantity": zod.number().int(),
+  "size": zod.string(),
+  "color": zod.string()
+}))
+})
+
+
+/**
+ * @summary Replace the current customer's cart
+ */
+export const ReplaceCartBody = zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string(),
+  "quantity": zod.number().int(),
+  "size": zod.string(),
+  "color": zod.string()
+}))
+})
+
+export const ReplaceCartResponse = zod.object({
+  "items": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "price": zod.number(),
+  "compareAtPrice": zod.number().nullable(),
+  "image": zod.string(),
+  "images": zod.array(zod.string()),
+  "sizes": zod.array(zod.string()),
+  "colors": zod.array(zod.string()),
+  "stock": zod.number().int(),
+  "tags": zod.array(zod.string()),
+  "featured": zod.boolean(),
+  "newest": zod.boolean(),
+  "trending": zod.boolean(),
+  "installmentAvailable": zod.boolean(),
+  "installmentAmount": zod.number().nullable()
+}),
+  "quantity": zod.number().int(),
+  "size": zod.string(),
+  "color": zod.string()
+}))
+})
+
+
+/**
+ * @summary Clear the current customer's cart
+ */
+export const ClearCartResponse = zod.object({
+  "items": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "price": zod.number(),
+  "compareAtPrice": zod.number().nullable(),
+  "image": zod.string(),
+  "images": zod.array(zod.string()),
+  "sizes": zod.array(zod.string()),
+  "colors": zod.array(zod.string()),
+  "stock": zod.number().int(),
+  "tags": zod.array(zod.string()),
+  "featured": zod.boolean(),
+  "newest": zod.boolean(),
+  "trending": zod.boolean(),
+  "installmentAvailable": zod.boolean(),
+  "installmentAmount": zod.number().nullable()
+}),
+  "quantity": zod.number().int(),
+  "size": zod.string(),
+  "color": zod.string()
 }))
 })
 
@@ -375,10 +541,18 @@ export const GetAdminSummaryResponse = zod.object({
   "paid": zod.number(),
   "remaining": zod.number(),
   "paymentMethod": zod.enum(['full', 'installment', 'bank-transfer']),
+  "installmentFrequency": zod.union([zod.literal('weekly'),zod.literal('monthly'),zod.literal(null)]).nullable(),
   "status": zod.enum(['pending', 'payment-verification', 'confirmed', 'processing', 'shipped', 'out-for-delivery', 'delivered', 'cancelled']),
   "createdAt": zod.string(),
   "expectedDelivery": zod.string(),
   "address": zod.string(),
+  "nextPayment": zod.string().nullable(),
+  "paymentHistory": zod.array(zod.object({
+  "amount": zod.number(),
+  "date": zod.string(),
+  "status": zod.string(),
+  "reference": zod.string()
+})),
   "timeline": zod.array(zod.object({
   "label": zod.string(),
   "date": zod.string().nullable(),

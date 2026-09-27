@@ -5,6 +5,7 @@
  * JAO LAB Fashion & Styles commerce API
  * OpenAPI spec version: 0.1.0
  */
+import type { OrderInputInstallmentFrequency } from './orderInputInstallmentFrequency';
 import type { OrderInputPaymentMethod } from './orderInputPaymentMethod';
 import type { OrderItem } from './orderItem';
 
@@ -18,4 +19,6 @@ export interface OrderInput {
   address: string;
   notes: string;
   paymentMethod: OrderInputPaymentMethod;
+  /** @nullable */
+  installmentFrequency: OrderInputInstallmentFrequency;
 }

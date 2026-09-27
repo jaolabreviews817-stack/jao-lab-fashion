@@ -20,6 +20,31 @@ export interface Category {
   image: string;
 }
 
+export interface Profile {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  state: string;
+  city: string;
+  address: string;
+}
+
+export interface ProfileInput {
+  fullName: string;
+  phone: string;
+  state: string;
+  city: string;
+  address: string;
+}
+
+export interface CartItemInput {
+  productId: string;
+  quantity: number;
+  size: string;
+  color: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -41,6 +66,21 @@ export interface Product {
   installmentAvailable: boolean;
   /** @nullable */
   installmentAmount: number | null;
+}
+
+export interface CartLine {
+  product: Product;
+  quantity: number;
+  size: string;
+  color: string;
+}
+
+export interface Cart {
+  items: CartLine[];
+}
+
+export interface CartInput {
+  items: CartItemInput[];
 }
 
 export interface HomeContent {
@@ -69,6 +109,17 @@ export const OrderPaymentMethod = {
   'bank-transfer': 'bank-transfer',
 } as const;
 
+/**
+ * @nullable
+ */
+export type OrderInstallmentFrequency = typeof OrderInstallmentFrequency[keyof typeof OrderInstallmentFrequency] | null;
+
+
+export const OrderInstallmentFrequency = {
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
 
 
@@ -82,6 +133,13 @@ export const OrderStatus = {
   delivered: 'delivered',
   cancelled: 'cancelled',
 } as const;
+
+export interface PaymentHistoryItem {
+  amount: number;
+  date: string;
+  status: string;
+  reference: string;
+}
 
 export interface OrderTimelineItem {
   label: string;
@@ -98,10 +156,15 @@ export interface Order {
   paid: number;
   remaining: number;
   paymentMethod: OrderPaymentMethod;
+  /** @nullable */
+  installmentFrequency: OrderInstallmentFrequency;
   status: OrderStatus;
   createdAt: string;
   expectedDelivery: string;
   address: string;
+  /** @nullable */
+  nextPayment: string | null;
+  paymentHistory: PaymentHistoryItem[];
   timeline: OrderTimelineItem[];
 }
 
@@ -114,6 +177,17 @@ export const OrderInputPaymentMethod = {
   'bank-transfer': 'bank-transfer',
 } as const;
 
+/**
+ * @nullable
+ */
+export type OrderInputInstallmentFrequency = typeof OrderInputInstallmentFrequency[keyof typeof OrderInputInstallmentFrequency] | null;
+
+
+export const OrderInputInstallmentFrequency = {
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
 export interface OrderInput {
   items: OrderItem[];
   fullName: string;
@@ -124,6 +198,8 @@ export interface OrderInput {
   address: string;
   notes: string;
   paymentMethod: OrderInputPaymentMethod;
+  /** @nullable */
+  installmentFrequency: OrderInputInstallmentFrequency;
 }
 
 export interface AdminSummary {
