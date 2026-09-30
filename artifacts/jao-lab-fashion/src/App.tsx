@@ -1,186 +1,1228 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, CircleUserRound,
-  CreditCard, ExternalLink, Heart, Home as HomeIcon, Loader2, LockKeyhole, LogIn,
-  Mail, MapPin, Menu, Minus, Package, Plus, Search, ShoppingBag, Sparkles, Truck,
-  UserRound, X, Check, Instagram, Phone, ShieldCheck, SlidersHorizontal, WalletCards,
-} from 'lucide-react';
-import {
-  useAddWishlistItem, useCreateOrder, useGetAdminSummary, useGetHome, useGetOrder,
-  useGetProduct, useGetWishlist, useListCategories, useListOrders, useListProducts,
-  useRemoveWishlistItem, useGetCart, useReplaceCart, useClearCart, useGetProfile,
-  useUpdateProfile,
-} from '@workspace/api-client-react';
-import type { Category, Order, OrderInput, Product } from '@workspace/api-client-react';
-import { Link, Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
-import { useAuth, AuthProvider } from '@/lib/auth';
-import { contactConfig } from '@/config/contact';
-import { AccountPage, ContactPage, LoginPage } from '@/components/customer-pages';
-import { AdminPage } from '@/components/admin-page';
-import { useCart, type CartLine } from '@/lib/cart';
+  ArrowRight,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleUserRound,
+  Heart,
+  Home as HomeIcon,
+  Loader2,
+  LogIn,
+  Menu,
+  Minus,
+  Package,
+  Plus,
+  Search,
+  ShoppingBag,
+  Sparkles,
+  Truck,
+  UserRound,
+  X,
+  Check,
+  SlidersHorizontal,
+  WalletCards,
+  ShieldCheck,
+  Star,
+  Tag,
+  Clock3,
+  MapPin,
+  CreditCard,
+  Gift,
+} from "lucide-react";
 
-const queryClient = new QueryClient();
-const money = (n: number) => `₦${Math.round(n).toLocaleString('en-NG')}`;
+import {
+  useGetHome,
+  useGetProduct,
+  useGetWishlist,
+  useAddWishlistItem,
+  useRemoveWishlistItem,
+  useListCategories,
+  useListProducts,
+  useListOrders,
+  useCreateOrder,
+} from "@workspace/api-client-react";
+
+import type {
+  Product,
+  Category,
+} from "@workspace/api-client-react";
+
+import {
+  Link,
+  Route,
+  Switch,
+  Router as WouterRouter,
+  useLocation,
+  useParams,
+} from "wouter";
+
+import { useAuth, AuthProvider } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+
+import {
+  AccountPage,
+  ContactPage,
+  LoginPage,
+} from "@/components/customer-pages";
+
+import { AdminPage } from "@/components/admin-page";
+
+import { contactConfig } from "@/config/contact";
+
+import "./index.css";
+
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://jao-lab-fashion-api.onrender.com";
+
+const money = (value: number) =>
+  `₦${Math.round(Number(value || 0)).toLocaleString("en-NG")}`;
+
 const fallbackImages = [
-  'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=900&q=85',
-  'https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=900&q=85',
-  'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&q=85',
+  "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1000&q=85",
+  "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=1000&q=85",
+  "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1000&q=85",
+  "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1000&q=85",
 ];
-const img = (p: Product | Category, index = 0) => (p as Product).image || fallbackImages[index % fallbackImages.length];
+
+const getImage = (item: any, index = 0) =>
+  item?.image ||
+  item?.imageUrl ||
+  item?.images?.[0] ||
+  fallbackImages[index % fallbackImages.length];
 
 function useNotice() {
-  const [notice, setNotice] = useState('');
-  const show = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(''), 2600); };
-  return { notice, show };
-}
+  const [notice, setNotice] = useState("");
 
-function Loading({ label = 'Curating the edit' }: { label?: string }) {
-  return <div className="min-h-[38vh] flex flex-col items-center justify-center gap-4 text-muted-foreground"><div className="h-10 w-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin" /><span className="font-mono text-[10px] uppercase tracking-[.2em]">{label}</span></div>;
-}
-function QueryError({ onRetry }: { onRetry?: () => void }) {
-  return <div className="mx-auto my-14 max-w-md rounded-2xl border border-accent/30 bg-accent/5 p-8 text-center"><Sparkles className="mx-auto mb-4 text-accent" size={22} /><h3 className="font-display text-2xl">The edit is taking a moment.</h3><p className="mt-2 text-sm text-muted-foreground">We could not load this page. Please try again.</p>{onRetry && <button data-testid="button-retry" onClick={onRetry} className="mt-5 rounded-full bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-primary-foreground">Try again</button>}</div>;
-}
-function Empty({ title, copy, action }: { title: string; copy: string; action?: ReactNode }) {
-  return <div className="mx-auto my-16 max-w-md text-center"><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-secondary/40 text-primary"><Sparkles size={22} /></div><h3 className="font-display text-3xl">{title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>{action}</div>;
-}
-
-type ThemePreference = 'dark' | 'light' | 'system';
-const systemPrefersDark = () => typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-function Shell({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  const { count } = useCart();
-  const [mobile, setMobile] = useState(false);
-  const [theme, setTheme] = useState<ThemePreference>(() => {
-    const saved = localStorage.getItem('jao-theme');
-    return saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'system';
-  });
   useEffect(() => {
-    const apply = () => document.documentElement.classList.toggle('dark', theme === 'dark' || (theme === 'system' && systemPrefersDark()));
-    apply();
-    localStorage.setItem('jao-theme', theme);
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, [theme]);
-  const nav = [['Shop', '/shop'], ['Categories', '/categories'], ['About', '/about'], ['Contact', '/contact']];
-  return <div className="grain min-h-[100dvh] bg-background">
-    <div className="overflow-hidden bg-primary py-2 text-center text-[10px] font-bold uppercase tracking-[.22em] text-primary-foreground"><div className="marquee flex w-max gap-16"><span>Complimentary Lagos delivery on orders over ₦150,000</span><span>Split your purchase in three with JAO PLAN</span><span>Complimentary Lagos delivery on orders over ₦150,000</span><span>Split your purchase in three with JAO PLAN</span></div></div>
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/90 backdrop-blur-md">
-      <div className="mx-auto flex h-[68px] max-w-[1440px] items-center justify-between px-5 md:h-[82px] md:px-10">
-        <button className="md:hidden" data-testid="button-open-menu" onClick={() => setMobile(!mobile)} aria-label="Open menu">{mobile ? <X size={21} /> : <Menu size={21} />}</button>
-        <Link href="/" data-testid="link-home" className="group flex items-center gap-2"><span className="font-display text-[27px] font-bold tracking-[-.06em]">JAO<span className="text-accent">.</span></span><span className="hidden border-l border-foreground/20 pl-2 font-mono text-[8px] uppercase leading-3 tracking-[.22em] text-muted-foreground sm:block">Lab<br />Fashion & Styles</span></Link>
-        <nav className="hidden items-center gap-7 md:flex">{nav.map(([label, href]) => <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} className={`text-[11px] font-bold uppercase tracking-[.14em] transition-colors hover:text-accent ${location === href ? 'text-accent' : ''}`}>{label}</Link>)}</nav>
-        <div className="flex items-center gap-3"><Link href="/search" data-testid="link-search" className="rounded-full p-2 hover:bg-muted"><Search size={18} strokeWidth={1.8} /></Link><select aria-label="Theme" data-testid="select-theme" value={theme} onChange={(e) => setTheme(e.target.value as ThemePreference)} className="hidden rounded-full border border-border bg-transparent px-2 py-1 text-[9px] uppercase tracking-wider outline-none sm:block"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><Link href="/account" data-testid="link-account" className="hidden rounded-full p-2 hover:bg-muted sm:block"><UserRound size={18} strokeWidth={1.8} /></Link><Link href="/cart" data-testid="link-cart" className="relative rounded-full p-2 hover:bg-muted"><ShoppingBag size={18} strokeWidth={1.8} />{count > 0 && <span data-testid="text-cart-count" className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 font-mono text-[9px] font-bold text-accent-foreground">{count}</span>}</Link></div>
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  return { notice, setNotice };
+}
+
+function Loading() {
+  return (
+    <div className="flex min-h-[300px] items-center justify-center">
+      <Loader2 className="h-7 w-7 animate-spin opacity-60" />
+    </div>
+  );
+}
+
+function Empty({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-3xl border border-black/10 bg-white p-10 text-center dark:border-white/10 dark:bg-white/[0.03]">
+      <Package className="mx-auto mb-4 h-10 w-10 opacity-40" />
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-sm opacity-60">{text}</p>
+    </div>
+  );
+}
+
+function SectionTitle({
+  eyebrow,
+  title,
+  link,
+}: {
+  eyebrow?: string;
+  title: string;
+  link?: string;
+}) {
+  return (
+    <div className="mb-7 flex items-end justify-between gap-4">
+      <div>
+        {eyebrow && (
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] opacity-50">
+            {eyebrow}
+          </p>
+        )}
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+          {title}
+        </h2>
       </div>
-      {mobile && <div className="border-t border-border bg-card px-5 py-5 md:hidden">{nav.map(([label, href]) => <Link key={href} onClick={() => setMobile(false)} href={href} className="block border-b border-border/60 py-3 text-xs font-bold uppercase tracking-[.16em]">{label}</Link>)}<Link href="/account" className="block py-3 text-xs font-bold uppercase tracking-[.16em]">Account</Link></div>}
-    </header>
-    <main className="mx-auto max-w-[1440px] px-5 pb-24 md:px-10">{children}</main>
-     <footer className="bg-primary px-5 py-14 text-primary-foreground md:px-10"><div className="mx-auto grid max-w-[1440px] gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]"><div><div className="font-display text-4xl tracking-[-.05em]">JAO<span className="text-secondary">.</span></div><p className="mt-4 max-w-xs text-sm leading-6 text-primary-foreground/65">A considered wardrobe for the way Lagos moves. Independent labels, tactile essentials, and a slower approach to buying well.</p><div className="mt-6 flex gap-3">{contactConfig.whatsappUrl && <a href={contactConfig.whatsappUrl} data-testid="link-whatsapp" className="rounded-full border border-primary-foreground/20 p-2 hover:bg-primary-foreground/10" aria-label="WhatsApp">WA</a>}{contactConfig.email && <a href={`mailto:${contactConfig.email}`} data-testid="link-email" className="rounded-full border border-primary-foreground/20 p-2 hover:bg-primary-foreground/10"><Mail size={16} /></a>}</div></div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Explore</p>{[['Shop','/shop'],['Categories','/categories'],['Wishlist','/wishlist'],['Orders','/orders']].map(([l,h]) => <Link key={h} href={h} className="block py-1.5 text-sm text-primary-foreground/75 hover:text-secondary">{l}</Link>)}</div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Studio</p>{[['Our story','/about'],['Contact','/contact'],['Account','/account']].map(([l,h]) => <Link key={h} href={h} className="block py-1.5 text-sm text-primary-foreground/75 hover:text-secondary">{l}</Link>)}</div><div><p className="mb-4 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Contact</p><div className="space-y-1.5 text-sm leading-6 text-primary-foreground/75">{contactConfig.location && <p>{contactConfig.location}</p>}{contactConfig.hours && <p>{contactConfig.hours}</p>}{contactConfig.phone && <a href={`tel:${contactConfig.phone}`} className="block hover:text-secondary">{contactConfig.phone}</a>}{!contactConfig.location && !contactConfig.hours && !contactConfig.phone && !contactConfig.email && <p>Contact details will be added by the studio.</p>}</div></div></div><div className="mx-auto mt-14 max-w-[1440px] border-t border-primary-foreground/15 pt-5 font-mono text-[9px] uppercase tracking-[.16em] text-primary-foreground/45">© 2024 JAO LAB Fashion & Styles · Made for a life in motion</div></footer>
-    <div className="fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-card/95 p-1.5 shadow-lg backdrop-blur-md md:hidden"><Link href="/" data-testid="mobile-home" className={`rounded-full p-3 ${location === '/' ? 'bg-primary text-primary-foreground' : ''}`}><HomeIcon size={17} /></Link><Link href="/shop" data-testid="mobile-shop" className={`rounded-full p-3 ${location === '/shop' ? 'bg-primary text-primary-foreground' : ''}`}><Search size={17} /></Link><Link href="/wishlist" data-testid="mobile-wishlist" className={`rounded-full p-3 ${location === '/wishlist' ? 'bg-primary text-primary-foreground' : ''}`}><Heart size={17} /></Link><Link href="/account" data-testid="mobile-account" className={`rounded-full p-3 ${location === '/account' ? 'bg-primary text-primary-foreground' : ''}`}><UserRound size={17} /></Link></div>
-  </div>;
+
+      {link && (
+        <Link
+          href={link}
+          className="flex items-center gap-1 text-sm font-semibold opacity-70 hover:opacity-100"
+        >
+          View all <ArrowRight className="h-4 w-4" />
+        </Link>
+      )}
+    </div>
+  );
 }
 
-function SectionHeading({ eyebrow, title, action }: { eyebrow: string; title: string; action?: ReactNode }) {
-  return <div className="mb-7 flex items-end justify-between gap-4"><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">{eyebrow}</p><h2 className="mt-2 font-display text-4xl leading-none tracking-[-.04em] md:text-5xl">{title}</h2></div>{action}</div>;
-}
+function Shell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [location, navigate] = useLocation();
+  const [search, setSearch] = useState("");
+  const [menu, setMenu] = useState(false);
 
-function ProductCard({ product, index = 0, onNotice }: { product: Product; index?: number; onNotice?: (s: string) => void }) {
   const { user } = useAuth();
-  const [, navigate] = useLocation();
-  const wishlist = useGetWishlist({ query: { queryKey: ['wishlist'], enabled: !!user } });
-  const addWish = useAddWishlistItem();
-  const removeWish = useRemoveWishlistItem();
-  const client = useQueryClient();
-  const cart = useCart();
-  const saved = !!wishlist.data?.some((p) => p.id === product.id);
-  const toggle = () => {
-    if (!user) { navigate('/login'); return; }
-    const action = saved ? removeWish : addWish;
-    action.mutate({ productId: product.id }, { onSuccess: (data) => { client.setQueryData(wishlist.queryKey, data); onNotice?.(saved ? 'Removed from wishlist' : 'Saved to wishlist'); } });
-  };
-  return <article data-testid={`card-product-${product.id}`} className={`group rise delay-${(index % 4) + 1}`}>
-    <div className="relative aspect-[.82] overflow-hidden rounded-[2px] bg-muted"><Link href={`/product/${product.id}`} data-testid={`link-product-${product.id}`} className="block h-full"><img src={img(product, index)} alt={product.name} className="image-lift h-full w-full object-cover" /></Link><button onClick={toggle} disabled={addWish.isPending || removeWish.isPending} data-testid={`button-wishlist-${product.id}`} className={`absolute right-3 top-3 rounded-full p-2.5 backdrop-blur-sm transition ${saved ? 'bg-accent text-accent-foreground' : 'bg-background/80 text-foreground hover:bg-accent hover:text-accent-foreground'}`} aria-label="Save product">{saved ? <Heart size={15} fill="currentColor" /> : <Heart size={15} />}</button>{product.tags?.[0] && <span className="absolute bottom-3 left-3 bg-secondary px-2 py-1 font-mono text-[9px] uppercase tracking-[.12em] text-secondary-foreground">{product.tags[0]}</span>}</div>
-    <div className="flex items-start justify-between gap-3 pt-4"><div><p className="font-mono text-[9px] uppercase tracking-[.17em] text-muted-foreground">{product.category}</p><Link href={`/product/${product.id}`} className="mt-1 block font-display text-[19px] leading-tight hover:text-accent">{product.name}</Link></div><p data-testid={`text-price-${product.id}`} className="whitespace-nowrap pt-1 font-mono text-[11px]">{money(product.price)}</p></div>
-    <button data-testid={`button-quick-add-${product.id}`} onClick={() => { cart.add(product, product.sizes?.[0], product.colors?.[0]); onNotice?.('Added to bag'); }} className="mt-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.17em] text-primary opacity-70 transition group-hover:opacity-100">Quick add <ArrowUpRight size={13} /></button>
-  </article>;
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const value = search.trim();
+    if (!value) return;
+    navigate(`/shop?search=${encodeURIComponent(value)}`);
+    setMenu(false);
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f7f7f5] text-[#111] dark:bg-[#090909] dark:text-white">
+      <div className="bg-black px-4 py-2 text-center text-[11px] font-medium text-white dark:bg-white dark:text-black">
+        Free Lagos delivery on orders over ₦150,000 • JAO LAB
+      </div>
+
+      <header className="sticky top-0 z-40 border-b border-black/10 bg-[#f7f7f5]/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#090909]/95">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 md:px-6">
+          <Link href="/" className="shrink-0">
+            <div className="text-xl font-black tracking-tight">
+              JAO<span className="opacity-40">LAB</span>
+            </div>
+          </Link>
+
+          <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
+            <Link href="/" className="opacity-70 hover:opacity-100">
+              Home
+            </Link>
+            <Link href="/shop" className="opacity-70 hover:opacity-100">
+              Shop
+            </Link>
+            <Link href="/categories" className="opacity-70 hover:opacity-100">
+              Categories
+            </Link>
+            <Link href="/contact" className="opacity-70 hover:opacity-100">
+              Contact
+            </Link>
+          </nav>
+
+          <form
+            onSubmit={submitSearch}
+            className="ml-auto hidden max-w-sm flex-1 items-center rounded-full border border-black/10 bg-white px-4 dark:border-white/10 dark:bg-white/[0.05] md:flex"
+          >
+            <Search className="h-4 w-4 opacity-50" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search fashion, accessories..."
+              className="w-full bg-transparent px-3 py-2 text-sm outline-none"
+            />
+          </form>
+
+          <Link
+            href={user ? "/account" : "/login"}
+            className="hidden rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/10 md:block"
+          >
+            {user ? (
+              <CircleUserRound className="h-5 w-5" />
+            ) : (
+              <LogIn className="h-5 w-5" />
+            )}
+          </Link>
+
+          <Link
+            href="/wishlist"
+            className="hidden rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/10 md:block"
+          >
+            <Heart className="h-5 w-5" />
+          </Link>
+
+          <Link
+            href="/cart"
+            className="rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <ShoppingBag className="h-5 w-5" />
+          </Link>
+
+          <button
+            onClick={() => setMenu(!menu)}
+            className="rounded-full p-2 md:hidden"
+          >
+            {menu ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
+          </button>
+        </div>
+
+        {menu && (
+          <div className="border-t border-black/10 p-4 dark:border-white/10 md:hidden">
+            <form onSubmit={submitSearch} className="mb-4 flex items-center rounded-2xl border px-4">
+              <Search className="h-4 w-4 opacity-50" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search..."
+                className="w-full bg-transparent px-3 py-3 outline-none"
+              />
+            </form>
+
+            <div className="grid gap-1">
+              {[
+                ["/", "Home"],
+                ["/shop", "Shop"],
+                ["/categories", "Categories"],
+                ["/wishlist", "Wishlist"],
+                ["/orders", "Orders"],
+                ["/account", "Account"],
+                ["/contact", "Contact"],
+              ].map(([href, label]) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMenu(false)}
+                  className="rounded-xl px-3 py-3 font-medium hover:bg-black/5 dark:hover:bg-white/5"
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 pb-24 pt-5 md:px-6 md:pb-12">
+        {children}
+      </main>
+
+      <footer className="border-t border-black/10 dark:border-white/10">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-4 md:px-6">
+          <div>
+            <div className="text-xl font-black">
+              JAO<span className="opacity-40">LAB</span>
+            </div>
+            <p className="mt-3 max-w-xs text-sm leading-6 opacity-60">
+              Fashion, accessories and everyday style. Discover pieces that
+              fit your story.
+            </p>
+          </div>
+
+          <div>
+            <p className="mb-4 text-sm font-bold">Explore</p>
+            <div className="grid gap-2 text-sm opacity-65">
+              <Link href="/shop">Shop</Link>
+              <Link href="/categories">Categories</Link>
+              <Link href="/wishlist">Wishlist</Link>
+              <Link href="/orders">Orders</Link>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-4 text-sm font-bold">Support</p>
+            <div className="grid gap-2 text-sm opacity-65">
+              <Link href="/contact">Contact</Link>
+              <Link href="/account">My Account</Link>
+              <span>Nationwide delivery</span>
+              <span>Secure payments</span>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-4 text-sm font-bold">Contact</p>
+            <div className="grid gap-3 text-sm opacity-65">
+              <span>📱 WhatsApp</span>
+              <span>☎️ Call</span>
+              <span>✉️ {contactConfig?.email || "Jao Lab Fashion & Styles"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-black/10 px-4 py-5 text-center text-xs opacity-50 dark:border-white/10">
+          © {new Date().getFullYear()} Jao Lab Fashion & Styles. All rights
+          reserved.
+        </div>
+      </footer>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-black/10 bg-[#f7f7f5]/95 px-4 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-[#090909]/95 md:hidden">
+        <div className="mx-auto flex max-w-md items-center justify-around">
+          <Link href="/" className="flex flex-col items-center gap-1 p-2 text-[10px]">
+            <HomeIcon className="h-5 w-5" />
+            Home
+          </Link>
+          <Link href="/shop" className="flex flex-col items-center gap-1 p-2 text-[10px]">
+            <Search className="h-5 w-5" />
+            Shop
+          </Link>
+          <Link href="/wishlist" className="flex flex-col items-center gap-1 p-2 text-[10px]">
+            <Heart className="h-5 w-5" />
+            Saved
+          </Link>
+          <Link href="/orders" className="flex flex-col items-center gap-1 p-2 text-[10px]">
+            <Package className="h-5 w-5" />
+            Orders
+          </Link>
+          <Link href="/account" className="flex flex-col items-center gap-1 p-2 text-[10px]">
+            <UserRound className="h-5 w-5" />
+            Account
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <Loading label="Opening your account" />;
-  if (!user) return <Empty title="This space is personal." copy="Sign in to view your saved pieces, orders, and delivery details." action={<Link href="/login" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Sign in</Link>} />;
-  return <>{children}</>;
+function ProductCard({
+  product,
+  index = 0,
+}: {
+  product: Product;
+  index?: number;
+}) {
+  const { user } = useAuth();
+  const { data: wishlist } = useGetWishlist({
+    query: { enabled: !!user },
+  } as any);
+
+  const addWishlist = useAddWishlistItem();
+  const removeWishlist = useRemoveWishlistItem();
+
+  const [liked, setLiked] = useState(false);
+
+  const productId = (product as any).id;
+
+  useEffect(() => {
+    const items = (wishlist as any)?.items || [];
+    setLiked(
+      items.some(
+        (item: any) =>
+          item.productId === productId || item.product?.id === productId
+      )
+    );
+  }, [wishlist, productId]);
+
+  async function toggleWishlist(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!user) return;
+
+    try {
+      if (liked) {
+        await (removeWishlist as any).mutateAsync({
+          productId,
+        });
+        setLiked(false);
+      } else {
+        await (addWishlist as any).mutateAsync({
+          productId,
+        });
+        setLiked(true);
+      }
+    } catch {
+      // Keep UI stable if backend rejects duplicate requests.
+    }
+  }
+
+  const price = Number(
+    (product as any).price ||
+      (product as any).salePrice ||
+      (product as any).amount ||
+      0
+  );
+
+  const oldPrice = Number(
+    (product as any).compareAtPrice ||
+      (product as any).originalPrice ||
+      0
+  );
+
+  const discount =
+    oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
+
+  return (
+    <Link href={`/product/${productId}`} className="group block">
+      <div className="relative overflow-hidden rounded-2xl bg-black/[0.04] dark:bg-white/[0.04]">
+        <div className="aspect-[4/5] overflow-hidden">
+          <img
+            src={getImage(product, index)}
+            alt={(product as any).name || "Jao Lab product"}
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
+        </div>
+
+        {discount > 0 && (
+          <span className="absolute left-3 top-3 rounded-full bg-black px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-black">
+            -{discount}%
+          </span>
+        )}
+
+        <button
+          onClick={toggleWishlist}
+          className="absolute right-3 top-3 rounded-full bg-white/90 p-2 text-black shadow-sm backdrop-blur dark:bg-black/80 dark:text-white"
+        >
+          <Heart
+            className={`h-4 w-4 ${liked ? "fill-current" : ""}`}
+          />
+        </button>
+      </div>
+
+      <div className="px-1 pt-3">
+        <h3 className="line-clamp-1 text-sm font-semibold">
+          {(product as any).name || "Jao Lab Product"}
+        </h3>
+
+        <div className="mt-1 flex items-center gap-2">
+          <span className="font-bold">{money(price)}</span>
+
+          {oldPrice > price && (
+            <span className="text-xs line-through opacity-40">
+              {money(oldPrice)}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-2 flex items-center gap-1 text-[11px] opacity-55">
+          <Star className="h-3 w-3 fill-current" />
+          <span>{(product as any).rating || "New"}</span>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 function Home() {
-  const { data, isLoading, isError, refetch } = useGetHome();
-  const [notice, setNotice] = useState('');
+  const { data, isLoading } = useGetHome();
+
   if (isLoading) return <Loading />;
-  if (isError || !data) return <QueryError onRetry={() => refetch()} />;
-  return <div>
-    <section className="relative -mx-5 overflow-hidden bg-primary px-5 py-14 text-primary-foreground md:-mx-10 md:px-10 md:py-24"><div className="absolute right-[-10%] top-[-20%] h-[500px] w-[500px] rounded-full border border-secondary/25" /><div className="absolute right-[5%] top-[10%] h-[340px] w-[340px] rounded-full border border-secondary/15" /><div className="relative mx-auto grid max-w-[1440px] items-end gap-10 md:grid-cols-[1fr_.82fr]"><div className="rise"><p className="font-mono text-[10px] uppercase tracking-[.3em] text-secondary">The Lagos edit / 04—24</p><h1 className="mt-7 max-w-3xl font-display text-[clamp(4rem,11vw,9.5rem)] leading-[.82] tracking-[-.08em]">Wear<br /><i>your</i><br />story.</h1><p className="mt-8 max-w-sm text-sm leading-6 text-primary-foreground/70">Clothes with a point of view. Discover independent Nigerian labels and everyday pieces made to stay in rotation.</p><div className="mt-9 flex flex-wrap gap-3"><Link href="/shop" data-testid="link-hero-shop" className="inline-flex items-center gap-3 rounded-full bg-secondary px-6 py-3.5 text-xs font-bold uppercase tracking-[.14em] text-secondary-foreground transition hover:-translate-y-0.5">Shop the edit <ArrowRight size={15} /></Link><Link href="/about" data-testid="link-hero-story" className="inline-flex items-center gap-3 rounded-full border border-primary-foreground/25 px-6 py-3.5 text-xs font-bold uppercase tracking-[.14em] transition hover:bg-primary-foreground/10">Our story</Link></div></div><div className="relative hidden aspect-[.82] overflow-hidden rounded-[3px] bg-primary-foreground/10 md:block"><img src={img(data.featured?.[0] || ({} as Product), 0)} alt="JAO LAB featured look" className="h-full w-full object-cover opacity-90 mix-blend-screen" /><div className="absolute bottom-5 left-5 right-5 flex items-end justify-between"><span className="font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Look 01</span><span className="font-display text-2xl italic">Made in Lagos</span></div></div></div></section>
-    <div className="flex -mx-5 items-center justify-between border-b border-border px-5 py-4 md:-mx-10 md:px-10"><p className="font-mono text-[9px] uppercase tracking-[.18em] text-muted-foreground">{data.announcement}</p><span className="hidden font-mono text-[9px] uppercase tracking-[.18em] text-muted-foreground sm:block">Scroll to explore ↓</span></div>
-    <section className="py-16 md:py-24"><SectionHeading eyebrow="01 / Selected now" title="The latest edit" action={<Link href="/shop" data-testid="link-featured-all" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.17em] hover:text-accent">View all <ArrowRight size={14} /></Link>} /><div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{data.featured?.slice(0, 4).map((p, i) => <ProductCard key={p.id} product={p} index={i} onNotice={setNotice} />)}</div></section>
-    <section className="relative -mx-5 overflow-hidden bg-secondary px-5 py-16 md:-mx-10 md:px-10 md:py-20"><div className="mx-auto grid max-w-[1440px] items-center gap-8 md:grid-cols-[.7fr_1.3fr]"><div><p className="font-mono text-[10px] uppercase tracking-[.2em] text-secondary-foreground/70">02 / Pay your way</p><h2 className="mt-4 max-w-lg font-display text-5xl leading-[.92] tracking-[-.06em] md:text-7xl">Good things,<br /><i>in three.</i></h2></div><div className="max-w-xl"><p className="text-lg leading-7 text-secondary-foreground/80">JAO PLAN makes considered pieces easier to bring home. Pay one third today, then two more monthly payments. No hidden surprises. No compromise on the piece.</p><Link href="/shop" data-testid="link-plan-shop" className="mt-7 inline-flex items-center gap-2 border-b border-secondary-foreground pb-2 text-xs font-bold uppercase tracking-[.17em]">Explore eligible pieces <ArrowUpRight size={15} /></Link></div></div></section>
-    <section className="py-16 md:py-24"><SectionHeading eyebrow="03 / In rotation" title="New perspective" action={<Link href="/shop?sort=newest" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.17em] hover:text-accent">See newest <ArrowRight size={14} /></Link>} /><div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{data.newest?.slice(0, 4).map((p, i) => <ProductCard key={p.id} product={p} index={i + 1} onNotice={setNotice} />)}</div></section>
-    <section className="border-t border-border py-16 md:py-24"><SectionHeading eyebrow="04 / Find your form" title="Shop by mood" /><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{data.categories?.slice(0, 4).map((c, i) => <Link href={`/shop?category=${encodeURIComponent(c.name)}`} key={c.id} data-testid={`card-category-${c.id}`} className={`group relative aspect-[1.2] overflow-hidden bg-primary ${i === 1 ? 'lg:translate-y-9' : ''}`}><img src={img(c, i)} alt={c.name} className="image-lift h-full w-full object-cover opacity-70 mix-blend-luminosity" /><div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent" /><div className="absolute bottom-5 left-5 text-primary-foreground"><p className="font-mono text-[9px] uppercase tracking-[.2em] text-secondary">{String(c.count).padStart(2, '0')} pieces</p><h3 className="mt-1 font-display text-3xl">{c.name}</h3></div><ArrowUpRight className="absolute right-5 top-5 text-primary-foreground opacity-0 transition group-hover:opacity-100" /></Link>)}</div></section>
-    {notice && <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-primary px-5 py-3 text-xs font-bold text-primary-foreground shadow-lg">{notice}</div>}
-  </div>;
-}
 
-function Shop({ search = false }: { search?: boolean }) {
-  const [, navigate] = useLocation();
-  const params = new URLSearchParams(window.location.search);
-  const [q, setQ] = useState(params.get('q') || '');
-  const [category, setCategory] = useState(params.get('category') || '');
-  const [sort, setSort] = useState(params.get('sort') || 'featured');
-  const [notice, setNotice] = useState('');
-  const { data: categories } = useListCategories();
-  const { data: products, isLoading, isError, refetch } = useListProducts({ q: q || undefined, category: category || undefined, sort: sort as 'featured' | 'newest' | 'price-low' | 'price-high' });
-  const applySearch = (e: React.FormEvent) => { e.preventDefault(); navigate(`${search ? '/search' : '/shop'}?q=${encodeURIComponent(q)}`); };
-  return <div className="py-10 md:py-16"><div className="mb-10 flex flex-col justify-between gap-6 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">{search ? 'Search / JAO LAB' : 'The storefront'}</p><h1 className="mt-3 font-display text-6xl leading-[.85] tracking-[-.07em] md:text-8xl">{search ? 'Find your piece.' : 'The edit.'}</h1></div><form onSubmit={applySearch} className="flex w-full max-w-sm items-center border-b border-foreground/40 pb-2"><Search size={17} className="mr-3 text-muted-foreground" /><input data-testid="input-product-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search pieces, labels, moods" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" /><button data-testid="button-submit-search" className="font-mono text-[9px] uppercase tracking-widest text-accent">Find</button></form></div><div className="mb-8 flex flex-wrap items-center gap-2 border-y border-border py-4"><SlidersHorizontal size={15} className="mr-1 text-muted-foreground" /><select data-testid="select-category" value={category} onChange={(e) => { setCategory(e.target.value); navigate(`/shop?category=${e.target.value}`); }} className="rounded-full border border-border bg-transparent px-3 py-2 text-[10px] font-bold uppercase tracking-wider outline-none"><option value="">All categories</option>{categories?.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select><select data-testid="select-sort" value={sort} onChange={(e) => setSort(e.target.value)} className="rounded-full border border-border bg-transparent px-3 py-2 text-[10px] font-bold uppercase tracking-wider outline-none"><option value="featured">Featured</option><option value="newest">Newest</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select><span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{products?.length || 0} pieces</span></div>{isLoading ? <div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{[1,2,3,4].map(i => <div key={i} className="space-y-4"><div className="aspect-[.82] animate-pulse bg-muted" /><div className="h-4 w-2/3 animate-pulse bg-muted" /><div className="h-3 w-1/3 animate-pulse bg-muted" /></div>)}</div> : isError ? <QueryError onRetry={() => refetch()} /> : products?.length ? <div className="grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{products.map((p, i) => <ProductCard key={p.id} product={p} index={i} onNotice={setNotice} />)}</div> : <Empty title="Nothing in this frame." copy="Try another search or take a look at the complete edit." action={<Link href="/shop" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Reset edit</Link>} />}{notice && <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-primary px-5 py-3 text-xs font-bold text-primary-foreground shadow-lg">{notice}</div>}</div>;
-}
+  const home: any = data || {};
+  const featured: Product[] =
+    home.featuredProducts ||
+    home.featured ||
+    home.products ||
+    [];
 
-function Categories() { const { data, isLoading, isError, refetch } = useListCategories(); if (isLoading) return <Loading />; if (isError || !data) return <QueryError onRetry={() => refetch()} />; return <div className="py-10 md:py-16"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">The index / JAO LAB</p><h1 className="mt-3 max-w-3xl font-display text-6xl leading-[.86] tracking-[-.07em] md:text-9xl">Find your<br /><i>frequency.</i></h1><p className="mt-8 max-w-md text-sm leading-6 text-muted-foreground">A wardrobe arranged by instinct, not rules. Start with the feeling and let the pieces follow.</p><div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{data.map((c, i) => <Link key={c.id} href={`/shop?category=${encodeURIComponent(c.name)}`} data-testid={`category-${c.id}`} className={`group relative aspect-[.9] overflow-hidden bg-primary ${i % 3 === 1 ? 'lg:translate-y-14' : ''}`}><img src={img(c, i)} alt={c.name} className="image-lift h-full w-full object-cover opacity-75 mix-blend-luminosity" /><div className="absolute inset-0 bg-gradient-to-t from-primary via-transparent to-transparent" /><div className="absolute left-6 top-6 font-mono text-[10px] text-secondary">0{i + 1}</div><div className="absolute bottom-6 left-6 right-6 flex items-end justify-between text-primary-foreground"><div><h2 className="font-display text-4xl">{c.name}</h2><p className="mt-1 font-mono text-[9px] uppercase tracking-wider text-primary-foreground/60">{c.count} pieces</p></div><ArrowUpRight size={20} className="opacity-0 transition group-hover:opacity-100" /></div></Link>)}</div></div>; }
+  const newest: Product[] =
+    home.newestProducts ||
+    home.newest ||
+    [];
+
+  const categories: Category[] =
+    home.categories || [];
+
+  return (
+    <div>
+      <section className="relative overflow-hidden rounded-[2rem] bg-black text-white">
+        <div className="absolute inset-0">
+          <img
+            src={fallbackImages[0]}
+            className="h-full w-full object-cover opacity-45"
+            alt=""
+          />
+        </div>
+
+        <div className="relative grid min-h-[520px] items-end p-7 md:min-h-[600px] md:p-12">
+          <div className="max-w-2xl">
+            <div className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] opacity-75">
+              <Sparkles className="h-4 w-4" />
+              Jao Lab Fashion & Styles
+            </div>
+
+            <h1 className="text-5xl font-black leading-[0.9] tracking-[-0.05em] md:text-8xl">
+              Wear
+              <br />
+              your story.
+            </h1>
+
+            <p className="mt-6 max-w-md text-sm leading-6 text-white/70 md:text-base">
+              Discover fashion and accessories selected for people who want
+              their everyday style to stand out.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="/shop"
+                className="rounded-full bg-white px-6 py-3 text-sm font-bold text-black"
+              >
+                Shop now
+              </Link>
+
+              <Link
+                href="/categories"
+                className="rounded-full border border-white/30 px-6 py-3 text-sm font-bold"
+              >
+                Explore categories
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
+          <Truck className="mb-4 h-5 w-5" />
+          <h3 className="font-bold">Nationwide delivery</h3>
+          <p className="mt-1 text-xs opacity-55">
+            Get your order delivered to your location.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
+          <WalletCards className="mb-4 h-5 w-5" />
+          <h3 className="font-bold">Flexible payment</h3>
+          <p className="mt-1 text-xs opacity-55">
+            Pay in full or choose an available JAO Plan.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
+          <ShieldCheck className="mb-4 h-5 w-5" />
+          <h3 className="font-bold">Secure shopping</h3>
+          <p className="mt-1 text-xs opacity-55">
+            Your account and orders stay protected.
+          </p>
+        </div>
+      </section>
+
+      {categories.length > 0 && (
+        <section className="mt-16">
+          <SectionTitle
+            eyebrow="Browse"
+            title="Shop by category"
+            link="/categories"
+          />
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {categories.slice(0, 8).map((category: any, index) => (
+              <Link
+                key={category.id || index}
+                href={`/shop?category=${encodeURIComponent(
+                  category.slug || category.name || ""
+                )}`}
+                className="group relative aspect-square overflow-hidden rounded-2xl bg-black"
+              >
+                <img
+                  src={getImage(category, index)}
+                  alt={category.name}
+                  className="h-full w-full object-cover opacity-70 transition duration-500 group-hover:scale-105"
+                />
+
+                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 to-transparent p-4">
+                  <span className="font-bold text-white">
+                    {category.name}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {featured.length > 0 && (
+        <section className="mt-16">
+          <SectionTitle
+            eyebrow="Trending"
+            title="Featured picks"
+            link="/shop"
+          />
+
+          <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4">
+            {featured.slice(0, 8).map((product, index) => (
+              <ProductCard
+                key={(product as any).id || index}
+                product={product}
+                index={index}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {newest.length > 0 && (
+        <section className="mt-16">
+          <SectionTitle
+            eyebrow="Just in"
+            title="New arrivals"
+            link="/shop"
+          />
+
+          <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4">
+            {newest.slice(0, 8).map((product, index) => (
+              <ProductCard
+                key={(product as any).id || index}
+                product={product}
+                index={index + 2}
+              />
+          ))}
+        </div>
+      </section>
+    )}
+
+    <section className="mt-16 overflow-hidden rounded-[2rem] bg-black p-8 text-white md:p-12">
+      <div className="max-w-2xl">
+        <p className="text-xs uppercase tracking-[0.25em] text-white/60">
+          JAO PLAN
+        </p>
+        <h2 className="mt-3 text-3xl font-semibold md:text-5xl">
+          Good things, in three.
+        </h2>
+        <p className="mt-4 max-w-xl text-white/70">
+          Pay one third today, then complete the remaining payments according
+          to your selected installment plan.
+        </p>
+        <Link
+          href="/shop"
+          className="mt-7 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black"
+        >
+          Shop with JAO PLAN
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+      </div>
+    </section>
+
+    <section className="mt-16">
+      <SectionTitle
+        eyebrow="Categories"
+        title="Explore the edit"
+        link="/categories"
+      />
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {data.categories?.slice(0, 4).map((category, index) => (
+          <Link
+            key={(category as any).id || index}
+            href={`/shop?category=${encodeURIComponent(
+              (category as any).slug || (category as any).name || ""
+            )}`}
+            className="group overflow-hidden rounded-[1.5rem] bg-neutral-100"
+          >
+            <div className="aspect-[4/5] overflow-hidden">
+              <img
+                src={img(category, index)}
+                alt={(category as any).name || "Category"}
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+              />
+            </div>
+            <div className="flex items-center justify-between p-4">
+              <span className="font-medium">
+                {(category as any).name}
+              </span>
+              <ArrowUpRight className="h-4 w-4" />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  </main>
+);
+
+function Shop() {
+  const { data, isLoading, error } = useListProducts();
+  const products = data?.products || [];
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
+      <SectionTitle
+        eyebrow="Shop"
+        title="The Jao Lab edit"
+      />
+
+      {isLoading && <Loading />}
+
+      {error && <QueryError message="Unable to load products." />}
+
+      {!isLoading && !error && products.length === 0 && (
+        <Empty title="No products yet" />
+      )}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+        {products.map((product, index) => (
+          <ProductCard
+            key={(product as any).id || index}
+            product={product}
+            index={index}
+          />
+        ))}
+      </div>
+    </main>
+  );
+}
 
 function ProductPage() {
-  const { id = '' } = useParams();
-  const { data: product, isLoading, isError } = useGetProduct(id);
-  const { data: related } = useListProducts({ category: product?.category, sort: 'featured' });
-  const wishlist = useGetWishlist(); const addWish = useAddWishlistItem(); const removeWish = useRemoveWishlistItem(); const client = useQueryClient(); const cart = useCart(); const [selectedImage, setSelectedImage] = useState(0); const [size, setSize] = useState(''); const [color, setColor] = useState(''); const [notice, setNotice] = useState('');
-  if (isLoading) return <Loading label="Opening the piece" />; if (isError || !product) return <QueryError />;
-  const saved = !!wishlist.data?.some(p => p.id === product.id); const images = product.images?.length ? product.images : [product.image];
-  const toggle = () => { const action = saved ? removeWish : addWish; action.mutate({ productId: product.id }, { onSuccess: (data) => { client.setQueryData(wishlist.queryKey, data); setNotice(saved ? 'Removed from wishlist' : 'Saved to wishlist'); } }); };
-  return <div className="py-8 md:py-14"><Link href="/shop" className="mb-8 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground hover:text-accent"><ChevronLeft size={15} /> Back to edit</Link><div className="grid gap-10 lg:grid-cols-[1.15fr_.85fr] lg:gap-16"><div className="grid gap-3 sm:grid-cols-[82px_1fr]"><div className="order-2 flex gap-2 overflow-auto sm:order-1 sm:flex-col">{images.map((source, i) => <button key={source} data-testid={`button-gallery-${i}`} onClick={() => setSelectedImage(i)} className={`h-20 w-16 shrink-0 overflow-hidden ${selectedImage === i ? 'ring-2 ring-accent' : 'opacity-60'}`}><img src={source} alt="" className="h-full w-full object-cover" /></button>)}</div><div className="order-1 aspect-[.88] overflow-hidden bg-muted sm:order-2"><img data-testid="img-product-main" src={images[selectedImage]} alt={product.name} className="h-full w-full object-cover" /></div></div><div className="lg:pt-8"><div className="flex items-start justify-between gap-5"><div><p className="font-mono text-[10px] uppercase tracking-[.2em] text-accent">{product.category} / {product.subcategory}</p><h1 data-testid="text-product-name" className="mt-3 font-display text-5xl leading-[.9] tracking-[-.06em] md:text-7xl">{product.name}</h1></div><button data-testid="button-product-wishlist" onClick={toggle} className={`rounded-full border p-3 ${saved ? 'border-accent bg-accent text-accent-foreground' : 'border-border hover:border-accent hover:text-accent'}`}><Heart size={18} fill={saved ? 'currentColor' : 'none'} /></button></div><div className="mt-6 flex items-center gap-4"><span data-testid="text-product-price" className="font-mono text-sm">{money(product.price)}</span>{product.compareAtPrice && <span className="font-mono text-sm text-muted-foreground line-through">{money(product.compareAtPrice)}</span>}</div><p className="mt-8 text-sm leading-7 text-muted-foreground">{product.description}</p>{product.installmentAvailable && <div className="mt-8 flex gap-3 rounded-xl bg-secondary/35 p-4"><WalletCards className="mt-1 shrink-0" size={18} /><div><p className="text-xs font-bold uppercase tracking-wider">JAO PLAN available</p><p className="mt-1 text-sm text-muted-foreground">Pay {money(product.installmentAmount || product.price / 3)} today, then split the rest across two monthly payments.</p></div></div>}<div className="editorial-rule mt-8" />{product.colors?.length > 0 && <div className="mt-6"><p className="font-mono text-[10px] uppercase tracking-wider">Colour / <span className="text-accent">{color || 'Select'}</span></p><div className="mt-3 flex flex-wrap gap-2">{product.colors.map(c => <button key={c} onClick={() => setColor(c)} data-testid={`button-color-${c}`} className={`rounded-full border px-4 py-2 text-xs ${color === c ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:border-primary'}`}>{c}</button>)}</div></div>}{product.sizes?.length > 0 && <div className="mt-6"><p className="font-mono text-[10px] uppercase tracking-wider">Size / <span className="text-accent">{size || 'Select'}</span></p><div className="mt-3 flex flex-wrap gap-2">{product.sizes.map(s => <button key={s} onClick={() => setSize(s)} data-testid={`button-size-${s}`} className={`min-w-12 rounded-full border px-4 py-2 text-xs ${size === s ? 'border-primary bg-primary text-primary-foreground' : 'border-border hover:border-primary'}`}>{s}</button>)}</div></div>}<button data-testid="button-add-to-cart" onClick={() => { cart.add(product, size || product.sizes?.[0], color || product.colors?.[0]); setNotice('Added to bag'); }} className="mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-primary py-4 text-xs font-bold uppercase tracking-[.18em] text-primary-foreground transition hover:-translate-y-0.5">Add to bag <ShoppingBag size={16} /></button><p className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground"><ShieldCheck size={14} className="text-accent" /> Secure checkout · Easy Lagos delivery</p></div></div>{related && related.filter(p => p.id !== product.id).length > 0 && <section className="mt-20 border-t border-border pt-12"><SectionHeading eyebrow="Complete the look" title="You may also like" /><div className="grid gap-5 sm:grid-cols-3">{related.filter(p => p.id !== product.id).slice(0,3).map((p,i) => <ProductCard key={p.id} product={p} index={i} onNotice={setNotice} />)}</div></section>}{notice && <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-primary px-5 py-3 text-xs font-bold text-primary-foreground shadow-lg">{notice}</div>}</div>;
+  const { id } = useParams<{ id: string }>();
+  const { data, isLoading, error } = useGetProduct(id);
+
+  const product = data?.product;
+
+  if (isLoading) return <Loading />;
+  if (error || !product) {
+    return <QueryError message="Product could not be found." />;
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
+      <div className="grid gap-8 md:grid-cols-2">
+        <div className="overflow-hidden rounded-[2rem] bg-neutral-100">
+          <img
+            src={img(product, 0)}
+            alt={product.name}
+            className="aspect-square h-full w-full object-cover"
+          />
+        </div>
+
+        <div className="flex flex-col justify-center">
+          <p className="text-xs uppercase tracking-[0.25em] text-neutral-500">
+            JAO LAB
+          </p>
+
+          <h1 className="mt-3 text-3xl font-semibold md:text-5xl">
+            {product.name}
+          </h1>
+
+          <p className="mt-5 text-2xl font-medium">
+            {money(Number(product.price || 0))}
+          </p>
+
+          {product.description && (
+            <p className="mt-6 leading-7 text-neutral-600">
+              {product.description}
+            </p>
+          )}
+
+          <div className="mt-8 grid gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const cart = JSON.parse(
+                  localStorage.getItem("jao-lab-cart") || "[]"
+                );
+
+                const existing = cart.find(
+                  (item: any) => item.productId === (product as any).id
+                );
+
+                if (existing) {
+                  existing.quantity += 1;
+                } else {
+                  cart.push({
+                    productId: (product as any).id,
+                    product,
+                    quantity: 1,
+                  });
+                }
+
+                localStorage.setItem(
+                  "jao-lab-cart",
+                  JSON.stringify(cart)
+                );
+
+                window.dispatchEvent(new Event("storage"));
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-medium text-white"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              Add to cart
+            </button>
+
+            <Link
+              href="/cart"
+              className="flex w-full items-center justify-center rounded-full border border-black px-6 py-4 text-sm font-medium"
+            >
+              View cart
+            </Link>
+          </div>
+
+          <div className="mt-8 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl bg-neutral-100 p-4">
+              <ShieldCheck className="h-5 w-5" />
+              <p className="mt-3 text-sm font-medium">
+                Secure checkout
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Multiple payment options available.
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-neutral-100 p-4">
+              <WalletCards className="h-5 w-5" />
+              <p className="mt-3 text-sm font-medium">
+                JAO PLAN
+              </p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Choose an installment option during checkout.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
 
-function Wishlist() { const { data, isLoading, isError, refetch } = useGetWishlist(); const [notice, setNotice] = useState(''); if (isLoading) return <Loading label="Finding your saved pieces" />; if (isError) return <QueryError onRetry={() => refetch()} />; return <div className="py-10 md:py-16"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Your edit</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em] md:text-8xl">Saved for later.</h1>{data?.length ? <div className="mt-12 grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">{data.map((p,i) => <ProductCard key={p.id} product={p} index={i} onNotice={setNotice} />)}</div> : <Empty title="A little room to dream." copy="Save pieces as you browse and your private edit will appear here." action={<Link href="/shop" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Browse the edit</Link>} />}{notice && <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-primary px-5 py-3 text-xs font-bold text-primary-foreground shadow-lg">{notice}</div>}</div>; }
+function CategoriesPage() {
+  const { data, isLoading } = useListCategories();
+  const categories = data?.categories || [];
 
-function Cart() { const cart = useCart(); const [, navigate] = useLocation(); return <div className="py-10 md:py-16"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Your bag / {cart.count} items</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em] md:text-8xl">Ready when you are.</h1>{cart.cart.length ? <div className="mt-12 grid gap-12 lg:grid-cols-[1fr_370px]"><div>{cart.cart.map((line, i) => <div key={`${line.product.id}-${i}`} data-testid={`cart-line-${line.product.id}`} className="flex gap-4 border-t border-border py-5"><img src={img(line.product, i)} alt={line.product.name} className="h-32 w-24 object-cover md:h-40 md:w-32" /><div className="flex min-w-0 flex-1 flex-col justify-between"><div><div className="flex justify-between gap-3"><div><p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{line.product.category}</p><h3 className="mt-1 font-display text-2xl">{line.product.name}</h3></div><p className="font-mono text-xs">{money(line.product.price * line.quantity)}</p></div><p className="mt-2 text-xs text-muted-foreground">Size: {line.size || 'Standard'} · Colour: {line.color || 'As shown'}</p></div><div className="flex items-center justify-between"><div className="flex items-center gap-3 rounded-full border border-border px-2 py-1"><button data-testid={`button-minus-${line.product.id}`} onClick={() => cart.update(i, line.quantity - 1)} className="p-1"><Minus size={13} /></button><span className="w-4 text-center font-mono text-xs">{line.quantity}</span><button data-testid={`button-plus-${line.product.id}`} onClick={() => cart.update(i, line.quantity + 1)} className="p-1"><Plus size={13} /></button></div><button data-testid={`button-remove-${line.product.id}`} onClick={() => cart.remove(i)} className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-accent">Remove</button></div></div></div>)}</div><aside className="h-fit rounded-2xl bg-secondary/40 p-6"><p className="font-mono text-[10px] uppercase tracking-widest">Summary</p><div className="mt-6 flex justify-between text-sm"><span>Subtotal</span><span className="font-mono">{money(cart.total)}</span></div><div className="mt-3 flex justify-between text-sm text-muted-foreground"><span>Delivery</span><span>Calculated at checkout</span></div><div className="my-6 border-t border-secondary-foreground/20" /><div className="flex justify-between"><span className="font-bold">Total</span><span data-testid="text-cart-total" className="font-mono text-lg font-bold">{money(cart.total)}</span></div><button data-testid="button-checkout" onClick={() => navigate('/checkout')} className="mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-4 text-xs font-bold uppercase tracking-widest text-primary-foreground">Continue to checkout <ArrowRight size={15} /></button><p className="mt-4 text-center text-[10px] leading-4 text-muted-foreground">Taxes and delivery are confirmed before payment.</p></aside></div> : <Empty title="Your bag is quiet." copy="The right piece is out there. Browse the edit and bring something home." action={<Link href="/shop" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Start shopping</Link>} />}</div>; }
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
+      <SectionTitle
+        eyebrow="Categories"
+        title="Shop by category"
+      />
 
-function Checkout() { const cart = useCart(); const order = useCreateOrder(); const [, navigate] = useLocation(); const [method, setMethod] = useState<OrderInput['paymentMethod']>('full'); const [form, setForm] = useState({ fullName: '', phone: '', email: '', state: 'Lagos', city: 'Lagos', address: '', notes: '' }); const [error, setError] = useState(''); if (!cart.cart.length) return <Empty title="Nothing to check out." copy="Your bag is empty, but the edit is full of possibilities." action={<Link href="/shop" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Browse pieces</Link>} />; const submit = (e: React.FormEvent) => { e.preventDefault(); if (!form.fullName || !form.phone || !form.email || !form.address) { setError('Please complete your delivery details.'); return; } const data: OrderInput = { ...form, paymentMethod: method, items: cart.cart.map(l => ({ productId: l.product.id, productName: l.product.name, image: img(l.product), quantity: l.quantity, unitPrice: l.product.price, size: l.size || '', color: l.color || '' })) }; order.mutate({ data }, { onSuccess: (created) => { cart.clear(); navigate(`/orders/${created.id}`); }, onError: () => setError('We could not place the order. Please try again.') }); }; return <div className="py-10 md:py-16"><div className="mb-10"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Checkout / Step 01</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em] md:text-8xl">Bring it home.</h1></div><form onSubmit={submit} className="grid gap-12 lg:grid-cols-[1fr_370px]"><div className="space-y-10"><section><h2 className="font-display text-3xl">Delivery details</h2><div className="mt-5 grid gap-4 sm:grid-cols-2">{[['fullName','Full name'],['phone','Phone number'],['email','Email address'],['state','State'],['city','City']].map(([key, label]) => <label key={key} className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">{label}</span><input data-testid={`input-${key}`} required={['fullName','phone','email'].includes(key)} value={form[key as keyof typeof form]} onChange={e => setForm({ ...form, [key]: e.target.value })} className="mt-2 w-full border-b border-border bg-transparent py-2 text-sm outline-none focus:border-accent" /></label>)}<label className="block sm:col-span-2"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Delivery address</span><input data-testid="input-address" required value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="mt-2 w-full border-b border-border bg-transparent py-2 text-sm outline-none focus:border-accent" /></label><label className="block sm:col-span-2"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Note for the studio (optional)</span><textarea data-testid="input-notes" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="mt-2 min-h-20 w-full resize-none border-b border-border bg-transparent py-2 text-sm outline-none focus:border-accent" /></label></div></section><section><h2 className="font-display text-3xl">Choose your payment</h2><div className="mt-5 grid gap-3">{[['full','Pay in full','The simplest way to make it yours.'],['installment','JAO PLAN','Pay in three monthly parts.'],['bank-transfer','Bank transfer','We will share payment details after placing your order.']].map(([value, label, copy]) => <button type="button" key={value} data-testid={`button-payment-${value}`} onClick={() => setMethod(value as OrderInput['paymentMethod'])} className={`flex items-start gap-4 rounded-xl border p-4 text-left ${method === value ? 'border-primary bg-primary/5' : 'border-border'}`}><span className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border ${method === value ? 'border-primary bg-primary' : 'border-border'}`}>{method === value && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}</span><span><span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-muted-foreground">{copy}</span></span></button>)}</div></section></div><aside className="h-fit rounded-2xl bg-secondary/40 p-6"><p className="font-mono text-[10px] uppercase tracking-widest">Your order</p>{cart.cart.map(l => <div key={l.product.id} className="mt-4 flex justify-between gap-3 text-sm"><span>{l.product.name} × {l.quantity}</span><span className="font-mono text-xs">{money(l.product.price * l.quantity)}</span></div>)}<div className="my-6 border-t border-secondary-foreground/20" /><div className="flex justify-between font-bold"><span>Total</span><span className="font-mono">{money(cart.total)}</span></div>{error && <p className="mt-5 rounded-lg bg-accent/10 p-3 text-xs text-accent">{error}</p>}<button data-testid="button-place-order" disabled={order.isPending} className="mt-7 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-4 text-xs font-bold uppercase tracking-widest text-primary-foreground disabled:opacity-60">{order.isPending ? <Loader2 className="animate-spin" size={15} /> : <LockKeyhole size={15} />} Place order</button></aside></form></div>; }
+      {isLoading && <Loading />}
 
-function Account() { return <div className="py-10 md:py-16"><div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr]"><div className="rounded-2xl bg-primary p-7 text-primary-foreground md:p-10"><div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary font-display text-2xl text-secondary-foreground">A</div><p className="mt-8 font-mono text-[10px] uppercase tracking-[.2em] text-secondary">Your account</p><h1 className="mt-3 font-display text-5xl leading-[.9]">Make it<br /><i>personal.</i></h1><p className="mt-6 text-sm leading-6 text-primary-foreground/65">Sign in to keep your saved pieces, orders, and delivery details close.</p><Link href="/login" data-testid="link-account-login" className="mt-8 inline-flex items-center gap-2 rounded-full bg-secondary px-5 py-3 text-xs font-bold uppercase tracking-widest text-secondary-foreground">Sign in <LogIn size={14} /></Link></div><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Account surface</p><h2 className="mt-3 font-display text-5xl tracking-[-.06em] md:text-7xl">Everything<br />in its place.</h2><div className="mt-10 grid gap-3 sm:grid-cols-2">{[['Wishlist','Pieces waiting for you','/wishlist',Heart],['Orders','Follow every delivery','/orders',Package],['Delivery details','Your saved destination','/checkout',MapPin],['Need a hand?','Talk to the studio','/contact',Mail]].map(([label, copy, href, Icon]) => <Link href={href as string} key={label as string} data-testid={`account-${label}`} className="group rounded-xl border border-border p-5 transition hover:-translate-y-1 hover:border-accent"><div className="flex items-center justify-between"><Icon size={19} className="text-accent" /><ArrowUpRight size={16} className="opacity-40 transition group-hover:opacity-100" /></div><p className="mt-9 font-display text-2xl">{label as string}</p><p className="mt-1 text-xs text-muted-foreground">{copy as string}</p></Link>)}</div></div></div></div>; }
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {categories.map((category, index) => (
+          <Link
+            key={(category as any).id || index}
+            href={`/shop?category=${encodeURIComponent(
+              (category as any).slug || (category as any).name || ""
+            )}`}
+            className="group overflow-hidden rounded-[1.5rem] bg-neutral-100"
+          >
+            <div className="aspect-[4/5] overflow-hidden">
+              <img
+                src={img(category, index)}
+                alt={(category as any).name || "Category"}
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+              />
+            </div>
 
-function Login({ signup = false }: { signup?: boolean }) { const [, navigate] = useLocation(); const [email, setEmail] = useState(''); const [name, setName] = useState(''); return <div className="mx-auto grid max-w-5xl gap-10 py-10 md:grid-cols-2 md:py-20"><div className="bg-primary p-8 text-primary-foreground md:p-12"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-secondary">JAO LAB / Member space</p><h1 className="mt-10 font-display text-6xl leading-[.87] tracking-[-.06em]">Your style,<br /><i>remembered.</i></h1><p className="mt-8 max-w-xs text-sm leading-6 text-primary-foreground/65">Keep your edit close. Save pieces, follow orders, and move through checkout with less repetition.</p></div><div className="py-4 md:py-10"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">{signup ? 'Create your space' : 'Welcome back'}</p><h2 className="mt-3 font-display text-5xl tracking-[-.06em]">{signup ? 'Join the edit.' : 'Good to see you.'}</h2><form onSubmit={e => { e.preventDefault(); navigate('/account'); }} className="mt-10 space-y-6">{signup && <label className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Full name</span><input data-testid="input-name" required value={name} onChange={e => setName(e.target.value)} className="mt-2 w-full border-b border-border bg-transparent py-3 text-sm outline-none focus:border-accent" /></label>}<label className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Email address</span><input data-testid="input-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-2 w-full border-b border-border bg-transparent py-3 text-sm outline-none focus:border-accent" /></label><label className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Password</span><input data-testid="input-password" type="password" required className="mt-2 w-full border-b border-border bg-transparent py-3 text-sm outline-none focus:border-accent" /></label><button data-testid="button-auth-submit" className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-4 text-xs font-bold uppercase tracking-widest text-primary-foreground">{signup ? 'Create account' : 'Sign in'} <ArrowRight size={14} /></button></form><p className="mt-7 text-center text-xs text-muted-foreground">{signup ? 'Already have an account? ' : 'New to JAO LAB? '}<Link href={signup ? '/login' : '/signup'} data-testid="link-switch-auth" className="font-bold text-accent">{signup ? 'Sign in' : 'Create an account'}</Link></p></div></div>; }
+            <div className="p-4 font-medium">
+              {(category as any).name}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </main>
+  );
+}
 
-function Orders() { const { data, isLoading, isError, refetch } = useListOrders(); if (isLoading) return <Loading label="Finding your orders" />; if (isError) return <QueryError onRetry={() => refetch()} />; return <div className="py-10 md:py-16"><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Your journey</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em] md:text-8xl">Orders.</h1>{data?.length ? <div className="mt-12 space-y-3">{data.map((o: Order) => <Link href={`/orders/${o.id}`} key={o.id} data-testid={`row-order-${o.id}`} className="group flex flex-col gap-4 rounded-xl border border-border p-5 transition hover:border-accent sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-4"><div className="flex -space-x-3">{o.items.slice(0,3).map((item,i) => <img key={i} src={item.image} alt="" className="h-14 w-11 rounded border-2 border-background object-cover" />)}</div><div><p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{o.id} · {new Date(o.createdAt).toLocaleDateString('en-NG')}</p><h3 className="mt-1 font-display text-2xl">{o.items.length} {o.items.length === 1 ? 'piece' : 'pieces'}</h3></div></div><div className="flex items-center justify-between gap-8 sm:justify-end"><div><p className="font-mono text-sm">{money(o.total)}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-accent">{o.status.replaceAll('-', ' ')}</p></div><ArrowRight size={17} className="transition group-hover:translate-x-1" /></div></Link>)}</div> : <Empty title="No orders yet." copy="Your first considered purchase will appear here, with every step of its journey." action={<Link href="/shop" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Explore the edit</Link>} />}</div>; }
+function WishlistPage() {
+  const { user } = useAuth();
 
-function OrderDetail() { const { id = '' } = useParams(); const { data, isLoading, isError } = useGetOrder(id); if (isLoading) return <Loading label="Opening order details" />; if (isError || !data) return <QueryError />; const statusHeading = data.status === 'delivered' ? 'Delivered.' : data.status === 'cancelled' ? 'Order cancelled.' : data.status === 'payment-verification' ? 'Payment pending.' : data.status === 'pending' ? 'Order received.' : 'On its way.'; return <div className="py-10 md:py-16"><Link href="/orders" className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-accent"><ChevronLeft size={15} /> All orders</Link><div className="mt-8 flex flex-col justify-between gap-5 border-b border-border pb-8 sm:flex-row sm:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[.2em] text-accent">Order {data.id}</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em]">{statusHeading}</h1></div><span data-testid="status-order" className="w-fit rounded-full bg-secondary px-4 py-2 font-mono text-[10px] uppercase tracking-wider">{data.status.replaceAll('-', ' ')}</span></div><div className="mt-10 grid gap-12 lg:grid-cols-[1fr_.75fr]"><div><h2 className="font-display text-3xl">Shipment progress</h2><div className="mt-8">{data.timeline.map((t, i) => <div key={t.label} className="relative flex gap-5 pb-8 last:pb-0"><div className="relative flex flex-col items-center"><span className={`z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 ${t.complete || t.current ? 'border-accent bg-accent' : 'border-border bg-background'}`}>{(t.complete || t.current) && <Check size={11} className="text-accent-foreground" />}</span>{i < data.timeline.length - 1 && <span className={`absolute top-5 h-full w-px ${t.complete ? 'bg-accent' : 'bg-border'}`} />}</div><div><p className={`text-sm font-bold ${t.current ? 'text-accent' : ''}`}>{t.label}</p><p className="mt-1 text-xs text-muted-foreground">{t.date ? new Date(t.date).toLocaleString('en-NG') : 'Coming up next'}</p></div></div>)}</div></div><aside><div className="rounded-xl bg-muted/60 p-6"><p className="font-mono text-[10px] uppercase tracking-widest">Order summary</p>{data.items.map(i => <div key={i.productId} className="mt-5 flex gap-3"><img src={i.image} alt="" className="h-16 w-12 object-cover" /><div className="flex-1"><p className="font-display text-lg">{i.productName}</p><p className="text-xs text-muted-foreground">Qty {i.quantity} · {i.size || 'Standard'}</p></div><p className="font-mono text-xs">{money(i.unitPrice * i.quantity)}</p></div>)}<div className="my-6 border-t border-border" /><div className="flex justify-between font-bold"><span>Total</span><span className="font-mono">{money(data.total)}</span></div><p className="mt-4 flex gap-2 text-xs text-muted-foreground"><MapPin size={14} /> {data.address}</p></div></aside></div></div>; }
+  if (!user) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-20 text-center">
+        <Heart className="mx-auto h-10 w-10" />
+        <h1 className="mt-5 text-2xl font-semibold">
+          Sign in to view your wishlist
+        </h1>
+        <Link
+          href="/login"
+          className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-sm text-white"
+        >
+          Sign in
+        </Link>
+      </main>
+    );
+  }
 
-function About() { return <div className="py-10 md:py-16"><section className="grid items-end gap-10 md:grid-cols-[1fr_.8fr]"><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">The studio / Since 2021</p><h1 className="mt-5 font-display text-[clamp(4rem,10vw,9rem)] leading-[.82] tracking-[-.08em]">Dress like<br /><i>you mean it.</i></h1></div><p className="max-w-sm text-sm leading-7 text-muted-foreground">JAO LAB is a Lagos-based fashion and lifestyle store for people who believe getting dressed is a form of authorship.</p></section><div className="mt-14 aspect-[1.7] overflow-hidden bg-primary md:mt-24"><img src={fallbackImages[1]} alt="Textile detail in a Lagos studio" className="h-full w-full object-cover opacity-80 mix-blend-luminosity" /></div><section className="mx-auto mt-16 grid max-w-4xl gap-10 md:grid-cols-2 md:mt-24"><div><p className="font-mono text-[10px] uppercase tracking-[.2em] text-accent">A point of view</p><h2 className="mt-4 font-display text-4xl leading-tight">The best wardrobe is not the loudest one.</h2></div><div className="space-y-5 text-sm leading-7 text-muted-foreground"><p>We look for pieces with a pulse: clothes that hold their shape, carry a story, and become more yours with every wear. Our edit moves between emerging Nigerian labels, thoughtful objects, and the everyday uniform.</p><p>From our corner in Lagos to wherever you are, we make buying feel less like scrolling and more like discovering.</p></div></section><section className="mt-20 border-t border-border pt-12"><div className="grid gap-8 sm:grid-cols-3"><div><span className="font-display text-5xl text-accent">01</span><h3 className="mt-3 font-display text-2xl">Curious</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">We follow good taste wherever it leads.</p></div><div><span className="font-display text-5xl text-accent">02</span><h3 className="mt-3 font-display text-2xl">Considered</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">We choose less, and choose it properly.</p></div><div><span className="font-display text-5xl text-accent">03</span><h3 className="mt-3 font-display text-2xl">Close</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">We keep the experience personal.</p></div></div></section></div>; }
+  const { data, isLoading } = useGetWishlist();
 
-function Contact() { const [sent, setSent] = useState(false); return <div className="py-10 md:py-16"><div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr]"><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">The studio / Talk to us</p><h1 className="mt-4 font-display text-7xl leading-[.85] tracking-[-.08em]">Come<br /><i>through.</i></h1><p className="mt-8 max-w-xs text-sm leading-7 text-muted-foreground">Questions about fit, delivery, or a piece you cannot stop thinking about? We are listening.</p><div className="mt-10 space-y-4 text-sm"><a href="mailto:hello@jaolab.com" className="flex items-center gap-3 hover:text-accent"><Mail size={16} /> hello@jaolab.com</a><a href="tel:+2348000000000" className="flex items-center gap-3 hover:text-accent"><Phone size={16} /> +234 800 000 0000</a><p className="flex items-center gap-3"><MapPin size={16} /> Victoria Island, Lagos</p></div></div><div className="rounded-2xl bg-secondary/35 p-6 md:p-10">{sent ? <div className="flex min-h-80 flex-col items-center justify-center text-center"><div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground"><Check size={22} /></div><h2 className="mt-6 font-display text-4xl">Message received.</h2><p className="mt-2 text-sm text-muted-foreground">Someone from the studio will be in touch shortly.</p></div> : <form onSubmit={e => { e.preventDefault(); setSent(true); }} className="space-y-6"><h2 className="font-display text-4xl">Leave a note.</h2><label className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Your name</span><input required data-testid="input-contact-name" className="mt-2 w-full border-b border-border bg-transparent py-3 outline-none focus:border-accent" /></label><label className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Email address</span><input type="email" required data-testid="input-contact-email" className="mt-2 w-full border-b border-border bg-transparent py-3 outline-none focus:border-accent" /></label><label className="block"><span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">How can we help?</span><textarea required data-testid="input-contact-message" className="mt-2 min-h-28 w-full resize-none border-b border-border bg-transparent py-3 outline-none focus:border-accent" /></label><button data-testid="button-contact-submit" className="flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-xs font-bold uppercase tracking-widest text-primary-foreground">Send note <ArrowRight size={14} /></button></form>}</div></div></div>; }
+  const items = data?.items || [];
 
-function Admin() { const { data, isLoading, isError, refetch } = useGetAdminSummary(); if (isLoading) return <Loading label="Loading studio report" />; if (isError || !data) return <QueryError onRetry={() => refetch()} />; const stats = [['Revenue', money(data.revenue), `${data.revenueChange > 0 ? '+' : ''}${data.revenueChange}% this month`],['Pending orders', data.pendingOrders, 'Need attention'],['Customers', data.customers, 'Across the studio'],['Low stock', data.lowStock, 'Pieces to watch']]; return <div className="py-10 md:py-16"><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[.24em] text-accent">Private / Studio report</p><h1 className="mt-3 font-display text-6xl tracking-[-.07em] md:text-8xl">Good morning.</h1></div><span className="flex items-center gap-2 rounded-full bg-secondary px-4 py-2 font-mono text-[10px] uppercase tracking-wider"><Sparkles size={13} /> Live summary</span></div><div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{stats.map(([label,value,copy]) => <div key={label} className="rounded-xl border border-border p-5"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p><p data-testid={`admin-${label}`} className="mt-7 font-display text-4xl">{value}</p><p className="mt-2 text-xs text-accent">{copy}</p></div>)}</div><div className="mt-12 grid gap-8 lg:grid-cols-[1fr_.65fr]"><div><div className="mb-5 flex items-center justify-between"><h2 className="font-display text-3xl">Recent orders</h2><Link href="/orders" className="font-mono text-[10px] uppercase tracking-widest text-accent">View all</Link></div><div className="space-y-2">{data.recentOrders.map((o) => <Link key={o.id} href={`/orders/${o.id}`} className="flex items-center justify-between rounded-lg border border-border p-4 hover:border-accent"><div><p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{o.id}</p><p className="mt-1 font-display text-xl">{o.items.length} pieces</p></div><div className="text-right"><p className="font-mono text-xs">{money(o.total)}</p><p className="mt-1 text-[10px] uppercase text-accent">{o.status.replaceAll('-', ' ')}</p></div></Link>)}</div></div><div className="rounded-xl bg-primary p-6 text-primary-foreground"><p className="font-mono text-[10px] uppercase tracking-widest text-secondary">Installments</p><p className="mt-10 font-display text-5xl">{money(data.outstandingInstallments)}</p><p className="mt-2 text-sm text-primary-foreground/65">Outstanding across active JAO PLAN orders.</p><Link href="/orders" className="mt-8 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-secondary">Review orders <ArrowUpRight size={13} /></Link></div></div></div>; }
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
+      <SectionTitle
+        eyebrow="Saved"
+        title="Your wishlist"
+      />
 
-function Router() { const [location] = useLocation(); return <ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/shop" component={() => <Shop />} /><Route path="/categories" component={Categories} /><Route path="/product/:id" component={ProductPage} /><Route path="/search" component={() => <Shop search />} /><Route path="/wishlist" component={() => <RequireAuth><Wishlist /></RequireAuth>} /><Route path="/cart" component={Cart} /><Route path="/checkout" component={() => <RequireAuth><Checkout /></RequireAuth>} /><Route path="/account" component={() => <RequireAuth><AccountPage /></RequireAuth>} /><Route path="/orders" component={() => <RequireAuth><Orders /></RequireAuth>} /><Route path="/orders/:id" component={() => <RequireAuth><OrderDetail /></RequireAuth>} /><Route path="/login" component={() => <LoginPage />} /><Route path="/signup" component={() => <LoginPage signup />} /><Route path="/about" component={About} /><Route path="/contact" component={ContactPage} /><Route path="/admin" component={() => <RequireAuth><AdminPage /></RequireAuth>} /><Route component={() => <Empty title="Page not found." copy="This corner of the studio does not exist." action={<Link href="/" className="mt-6 inline-block rounded-full bg-primary px-5 py-3 text-xs font-bold uppercase tracking-widest text-primary-foreground">Return home</Link>} />} /></Switch></ErrorBoundary>; }
+      {isLoading && <Loading />}
 
-function App() { return <QueryClientProvider client={queryClient}><AuthProvider><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Shell><Router /></Shell></WouterRouter><Toaster /></TooltipProvider></AuthProvider></QueryClientProvider>; }
+      {!isLoading && items.length === 0 && (
+        <Empty title="Your wishlist is empty" />
+      )}
 
-export default App;
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {items.map((item: any, index: number) => (
+          <ProductCard
+            key={item.id || index}
+            product={item.product || item}
+            index={index}
+          />
+        ))}
+      </div>
+    </main>
+  );
+}
+
+function OrdersPage() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return (
+      <main className="mx-auto max-w-2xl px-4 py-20 text-center">
+        <Package className="mx-auto h-10 w-10" />
+        <h1 className="mt-5 text-2xl font-semibold">
+          Sign in to view your orders
+        </h1>
+        <Link
+          href="/login"
+          className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-sm text-white"
+        >
+          Sign in
+        </Link>
+      </main>
+    );
+  }
+
+  const { data, isLoading, error } = useListOrders();
+
+  const orders = data?.orders || [];
+
+  return (
+    <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-12">
+      <SectionTitle
+        eyebrow="Account"
+        title="Your orders"
+      />
+
+      {isLoading && <Loading />}
+
+      {error && <QueryError message="Unable to load orders." />}
+
+      {!isLoading && !error && orders.length === 0 && (
+        <Empty title="No orders yet" />
+      )}
+
+      <div className="space-y-4">
+        {orders.map((order: any, index: number) => (
+          <div
+            key={order.id || order.orderNumber || index}
+            className="rounded-3xl border border-neutral-200 p-5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                  Order
+                </p>
+                <p className="mt-1 font-medium">
+                  {order.orderNumber || order.id}
+                </p>
+              </div>
+
+              <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs">
+                {order.status || "Pending"}
+              </span>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between">
+              <span className="text-sm text-neutral-500">
+                Total
+              </span>
+              <span className="font-semibold">
+                {money(Number(order.total || order.totalAmount || 0))}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </main>
+  );
+}
+
+function CartPage() {
+  const [cart, setCart] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadCart = () => {
+      try {
+        setCart(
+          JSON.parse(
+            localStorage.getItem("jao-lab-cart") || "[]"
+          )
+        );
+      } catch {
+        setCart([]);
+      }
+    };
+
+    loadCart();
+    window.addEventListener("storage", loadCart);
+
+    return () => {
+      window.removeEventListener("storage", loadCart);
+    };
+  }, []);
+
+  const total = cart.reduce(
+    (sum, item) =>
+      sum +
+      Number(item.product?.price || 0) *
+        Number(item.quantity || 1),
+    0
+  );
+
+  const updateQuantity = (index: number, quantity: number) => {
+    const next = [...cart];
+
+    if (quantity <= 0) {
+      next.splice(index, 1);
+    } else {
+      next[index] = {
+        ...next[index],
+        quantity,
+      };
+    }
+
+    setCart(next);
+    localStorage.setItem("jao-lab-cart", JSON.stringify(next));
+  };
+
+  return (
+    <main className="mx-auto max-w-5xl px-4 py-8 md:px-6 md:py-12">
+      <SectionTitle
+        eyebrow="Shopping bag"
+        title="Your cart"
+      />
+
+      {cart.length === 0 ? (
+        <Empty title="Your cart is empty" />
+      ) : (
+        <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+          <div className="space-y-3">
+            {cart.map((item, index) => (
+              <div
+                key={item.product?.id || index}
+                className="flex gap-4 rounded-3xl border border-neutral-200 p-4"
+              >
+                <img
+                  src={img(item.product, index)}
+                  alt={item.product?.name || "Product"}
+                  className="h-28 w-24 rounded-2xl object-cover"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-medium">
+                    {item.product?.name}
+                  </h3>
+
+                  <p className="mt-1 text-sm text-neutral-500">
+                    {money(Number(item.product?.price || 0))}
+                  </p>
+
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateQuantity(
+                          index,
+                          Number(item.quantity || 1) - 1
+                        )
+                      }
+                      className="rounded-full border p-2"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </button>
+
+                    <span className="min-w-5 text-center text-sm">
+                      {item.quantity || 1}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateQuantity(
+                          index,
+                          Number(item.quantity || 1) + 1
+                        )
+                      }
+                      className="rounded-full border p-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="h-fit rounded-3xl bg-neutral-100 p-6">
+            <h2 className="text-xl font-semibold">
+              Order summary
+            </h2>
+
+            <div className="mt-6 flex justify-between">
+              <span className="text-neutral-500">Subtotal</span>
+              <span className="font-medium">{money(total)}</span>
+            </div>
+
+            <div className="mt-3 flex justify-between">
+              <span className="text-neutral-500">Delivery</span>
+              <span className="text-sm">Calculated at checkout</span>
+            </div>
+
+            <div className="my-5 border-t border-neutral-300" />
+
+            <div className="flex justify-between text-lg font-semibold">
+              <span>Total</span>
+              <span>{money(total)}</span>
+            </div>
+
+            <Link
+              href="/login"
+              className="mt-6 flex w-full items-center justify-center rounded-full bg-black px-6 py-4 text-sm font-medium text-white"
+            >
+              Continue to checkout
+            </Link>
+
+            <p className="mt-3 text-center text-xs text-neutral-500">
+              Installment options can be selected during checkout.
+            </p>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <Switch>
+      <Route path="/" component={Home} />
+      <Route path="/shop" component={Shop} />
+      <Route path="/product/:id" component={ProductPage} />
+      <Route path="/categories" component={CategoriesPage} />
+      <Route path="/wishlist" component={WishlistPage} />
+      <Route path="/orders" component={OrdersPage} />
+      <Route path="/cart" component={CartPage} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/account" component={AccountPage} />
+      <Route path="/contact" component={ContactPage} />
+      <Route path="/admin" component={AdminPage} />
+      <Route>
+        <Home />
+      </Route>
+    </Switch>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <TooltipProvider>
+          <AuthProvider>
+            <WouterRouter>
+              <Shell>
+                <AppRoutes />
+              </Shell>
+            </WouterRouter>
+
+            <Toaster />
+          </AuthProvider>
+        </TooltipProvider>
+      </ErrorBoundary>
+    </QueryClientProvider>
+  );
+          }
