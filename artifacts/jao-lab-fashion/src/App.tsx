@@ -1318,13 +1318,17 @@ function CartPage() {
 
         for (const item of saved) {
           try {
-            const apiBase =
-              (import.meta as any).env?.VITE_API_URL ||
-              "https://jao-lab-fashion-api.onrender.com";
+            const rawApiBase =
+    (import.meta as any).env?.VITE_API_URL ||
+    "https://jao-lab-fashion-api.onrender.com";
 
-            const response = await fetch(
-              `${apiBase}/products/${item.productId}`,
-            );
+const apiBase = rawApiBase.endsWith("/api")
+    ? rawApiBase
+    : `${rawApiBase}/api`;
+
+const response = await fetch(
+    `${apiBase}/products/${item.productId}`,
+);
 
             if (response.ok) {
               const product = await response.json();
