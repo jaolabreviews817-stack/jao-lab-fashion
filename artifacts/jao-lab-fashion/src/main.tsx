@@ -6,7 +6,15 @@ import { ErrorBoundary } from '@/components/error-boundary';
 
 import './index.css';
 
-setBaseUrl(import.meta.env.VITE_API_URL || 'https://jao-lab-fashion-api.onrender.com');
+const rawApiBase =
+  import.meta.env.VITE_API_URL ||
+  'https://jao-lab-fashion-api.onrender.com';
+
+setBaseUrl(
+  rawApiBase.endsWith('/api')
+    ? rawApiBase
+    : `${rawApiBase}/api`,
+);
 
 createRoot(document.getElementById('root')!, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.
