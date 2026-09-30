@@ -432,15 +432,15 @@ function Shell({
     </div>
 
     <div>
-      <p className="text-sm font-semibold">
-        Contact
-      </p>
-      <div className="mt-4 grid gap-3 text-sm">
-        <span className="flex items-center gap-2">
-          <Phone className="h-4 w-4" />
-          WhatsApp / Call
-        </span>
-        <span>
+        <p className="text-sm font-semibold">
+          Contact
+        </p>
+
+        <div className="mt-4 grid gap-3 text-sm text-neutral-500">
+          <span className="flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            WhatsApp / Call
+          </span>
 
           <span>
             {contactConfig?.email ||
