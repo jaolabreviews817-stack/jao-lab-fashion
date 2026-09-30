@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+
 import {
   ArrowRight,
+  ArrowUpRight,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CircleUserRound,
   Heart,
   Home as HomeIcon,
   Loader2,
-  LogIn,
   Menu,
   Minus,
   Package,
@@ -20,32 +22,26 @@ import {
   UserRound,
   X,
   Check,
-  SlidersHorizontal,
-  WalletCards,
+  Instagram,
+  Phone,
   ShieldCheck,
-  Star,
-  Tag,
-  Clock3,
-  MapPin,
-  CreditCard,
-  Gift,
+  WalletCards,
 } from "lucide-react";
 
 import {
+  useAddWishlistItem,
   useGetHome,
   useGetProduct,
   useGetWishlist,
-  useAddWishlistItem,
-  useRemoveWishlistItem,
   useListCategories,
-  useListProducts,
   useListOrders,
-  useCreateOrder,
+  useListProducts,
+  useRemoveWishlistItem,
 } from "@workspace/api-client-react";
 
 import type {
-  Product,
   Category,
+  Product,
 } from "@workspace/api-client-react";
 
 import {
@@ -58,9 +54,7 @@ import {
 } from "wouter";
 
 import { useAuth, AuthProvider } from "@/lib/auth";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { contactConfig } from "@/config/contact";
 
 import {
   AccountPage,
@@ -69,63 +63,95 @@ import {
 } from "@/components/customer-pages";
 
 import { AdminPage } from "@/components/admin-page";
-
-import { contactConfig } from "@/config/contact";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./index.css";
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://jao-lab-fashion-api.onrender.com";
+const queryClient = new QueryClient();
 
-const money = (value: number) =>
-  `₦${Math.round(Number(value || 0)).toLocaleString("en-NG")}`;
+const money = (value: unknown) => {
+  const number = Number(value || 0);
+
+  return `₦${Math.round(number).toLocaleString("en-NG")}`;
+};
 
 const fallbackImages = [
-  "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1000&q=85",
-  "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=1000&q=85",
-  "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1000&q=85",
-  "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1000&q=85",
+  "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=900&q=85",
+  "https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=900&q=85",
+  "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=900&q=85",
 ];
 
-const getImage = (item: any, index = 0) =>
-  item?.image ||
-  item?.imageUrl ||
-  item?.images?.[0] ||
-  fallbackImages[index % fallbackImages.length];
+const getProductImage = (
+  product: Product | Category | any,
+  index = 0,
+) => {
+  return (
+    product?.image ||
+    product?.imageUrl ||
+    product?.thumbnail ||
+    fallbackImages[index % fallbackImages.length]
+  );
+};
 
 function useNotice() {
-  const [notice, setNotice] = useState("");
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 2600);
-    return () => window.clearTimeout(timer);
-  }, [notice]);
+  const show = (text: string) => {
+    setMessage(text);
 
-  return { notice, setNotice };
+    window.setTimeout(() => {
+      setMessage("");
+    }, 2500);
+  };
+
+  return {
+    message,
+    show,
+  };
 }
 
 function Loading() {
   return (
-    <div className="flex min-h-[300px] items-center justify-center">
-      <Loader2 className="h-7 w-7 animate-spin opacity-60" />
+    <div className="flex min-h-[240px] items-center justify-center">
+      <Loader2 className="h-7 w-7 animate-spin" />
     </div>
   );
 }
 
 function Empty({
   title,
-  text,
+  description,
 }: {
   title: string;
-  text: string;
+  description?: string;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white p-10 text-center dark:border-white/10 dark:bg-white/[0.03]">
-      <Package className="mx-auto mb-4 h-10 w-10 opacity-40" />
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm opacity-60">{text}</p>
+    <div className="rounded-[2rem] border border-neutral-200 p-10 text-center">
+      <ShoppingBag className="mx-auto h-8 w-8" />
+
+      <h2 className="mt-4 text-xl font-semibold">
+        {title}
+      </h2>
+
+      {description && (
+        <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">
+          {description}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function QueryError({
+  message = "Something went wrong.",
+}: {
+  message?: string;
+}) {
+  return (
+    <div className="rounded-[2rem] border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+      {message}
     </div>
   );
 }
@@ -140,14 +166,15 @@ function SectionTitle({
   link?: string;
 }) {
   return (
-    <div className="mb-7 flex items-end justify-between gap-4">
+    <div className="mb-6 flex items-end justify-between gap-4">
       <div>
         {eyebrow && (
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] opacity-50">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-neutral-500">
             {eyebrow}
           </p>
         )}
-        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">
           {title}
         </h2>
       </div>
@@ -155,11 +182,28 @@ function SectionTitle({
       {link && (
         <Link
           href={link}
-          className="flex items-center gap-1 text-sm font-semibold opacity-70 hover:opacity-100"
+          className="flex items-center gap-1 text-sm font-medium"
         >
-          View all <ArrowRight className="h-4 w-4" />
+          View all
+          <ArrowRight className="h-4 w-4" />
         </Link>
       )}
+    </div>
+  );
+}
+
+function Notice({
+  message,
+}: {
+  message: string;
+}) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <div className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-full bg-black px-5 py-3 text-sm text-white shadow-xl">
+      {message}
     </div>
   );
 }
@@ -167,156 +211,207 @@ function SectionTitle({
 function Shell({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
-  const [location, navigate] = useLocation();
-  const [search, setSearch] = useState("");
-  const [menu, setMenu] = useState(false);
+  const [location] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState("dark");
 
-  const { user } = useAuth();
+  useEffect(() => {
+    const saved =
+      localStorage.getItem("jao-lab-theme") || "dark";
 
-  function submitSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const value = search.trim();
-    if (!value) return;
-    navigate(`/shop?search=${encodeURIComponent(value)}`);
-    setMenu(false);
-  }
+    setTheme(saved);
+
+    if (saved === "light") {
+      document.documentElement.classList.remove("dark");
+    } else if (saved === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      const dark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+      document.documentElement.classList.toggle("dark", dark);
+    }
+  }, []);
+
+  const changeTheme = (value: string) => {
+    setTheme(value);
+    localStorage.setItem("jao-lab-theme", value);
+
+    if (value === "dark") {
+      document.documentElement.classList.add("dark");
+    } else if (value === "light") {
+      document.documentElement.classList.remove("dark");
+    } else {
+      const dark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+      document.documentElement.classList.toggle("dark", dark);
+    }
+  };
+
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return location === "/";
+    }
+
+    return location.startsWith(path);
+  };
 
   return (
-    <div className="min-h-screen bg-[#f7f7f5] text-[#111] dark:bg-[#090909] dark:text-white">
-      <div className="bg-black px-4 py-2 text-center text-[11px] font-medium text-white dark:bg-white dark:text-black">
-        Free Lagos delivery on orders over ₦150,000 • JAO LAB
+    <div className="min-h-screen bg-white text-black dark:bg-[#0b0b0b] dark:text-white">
+      <div className="border-b border-black/10 bg-black px-4 py-2 text-center text-[10px] uppercase tracking-[0.18em] text-white dark:border-white/10">
+        Complimentary Lagos delivery on orders over ₦150,000
+        {" • "}
+        Flexible JAO PLAN payment options
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-black/10 bg-[#f7f7f5]/95 backdrop-blur-xl dark:border-white/10 dark:bg-[#090909]/95">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 md:px-6">
-          <Link href="/" className="shrink-0">
-            <div className="text-xl font-black tracking-tight">
-              JAO<span className="opacity-40">LAB</span>
+      <header className="sticky top-0 z-50 border-b border-black/10 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-[#0b0b0b]/90">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-6">
+          <Link
+            href="/"
+            className="flex items-center gap-2"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-xs font-bold text-white dark:bg-white dark:text-black">
+              JL
             </div>
+
+            <span className="hidden text-sm font-semibold sm:block">
+              Jao Lab
+            </span>
           </Link>
 
-          <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
-            <Link href="/" className="opacity-70 hover:opacity-100">
-              Home
-            </Link>
-            <Link href="/shop" className="opacity-70 hover:opacity-100">
+          <nav className="hidden items-center gap-6 md:flex">
+            <Link
+              href="/shop"
+              className={
+                isActive("/shop")
+                  ? "text-sm font-semibold"
+                  : "text-sm text-neutral-500"
+              }
+            >
               Shop
             </Link>
-            <Link href="/categories" className="opacity-70 hover:opacity-100">
+
+            <Link
+              href="/categories"
+              className="text-sm text-neutral-500"
+            >
               Categories
             </Link>
-            <Link href="/contact" className="opacity-70 hover:opacity-100">
+
+            <Link
+              href="/contact"
+              className="text-sm text-neutral-500"
+            >
               Contact
             </Link>
           </nav>
 
-          <form
-            onSubmit={submitSearch}
-            className="ml-auto hidden max-w-sm flex-1 items-center rounded-full border border-black/10 bg-white px-4 dark:border-white/10 dark:bg-white/[0.05] md:flex"
-          >
-            <Search className="h-4 w-4 opacity-50" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search fashion, accessories..."
-              className="w-full bg-transparent px-3 py-2 text-sm outline-none"
-            />
-          </form>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/shop"
+              className="rounded-full p-2"
+              aria-label="Search"
+            >
+              <Search className="h-5 w-5" />
+            </Link>
 
-          <Link
-            href={user ? "/account" : "/login"}
-            className="hidden rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/10 md:block"
-          >
-            {user ? (
-              <CircleUserRound className="h-5 w-5" />
-            ) : (
-              <LogIn className="h-5 w-5" />
-            )}
-          </Link>
+            <select
+              value={theme}
+              onChange={(event) =>
+                changeTheme(event.target.value)
+              }
+              className="hidden rounded-full border border-black/10 bg-transparent px-3 py-2 text-xs outline-none dark:border-white/10 sm:block"
+            >
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">System</option>
+            </select>
 
-          <Link
-            href="/wishlist"
-            className="hidden rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/10 md:block"
-          >
-            <Heart className="h-5 w-5" />
-          </Link>
+            <Link
+              href="/wishlist"
+              className="hidden rounded-full p-2 sm:block"
+              aria-label="Wishlist"
+            >
+              <Heart className="h-5 w-5" />
+            </Link>
 
-          <Link
-            href="/cart"
-            className="rounded-full p-2 hover:bg-black/5 dark:hover:bg-white/10"
-          >
-            <ShoppingBag className="h-5 w-5" />
-          </Link>
+            <Link
+              href="/account"
+              className="rounded-full p-2"
+              aria-label="Account"
+            >
+              <UserRound className="h-5 w-5" />
+            </Link>
 
-          <button
-            onClick={() => setMenu(!menu)}
-            className="rounded-full p-2 md:hidden"
-          >
-            {menu ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </button>
+            <Link
+              href="/cart"
+              className="rounded-full p-2"
+              aria-label="Cart"
+            >
+              <ShoppingBag className="h-5 w-5" />
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setMenuOpen((value) => !value)}
+              className="rounded-full p-2 md:hidden"
+              aria-label="Menu"
+            >
+              {menuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
+            </button>
+          </div>
         </div>
 
-        {menu && (
-          <div className="border-t border-black/10 p-4 dark:border-white/10 md:hidden">
-            <form onSubmit={submitSearch} className="mb-4 flex items-center rounded-2xl border px-4">
-              <Search className="h-4 w-4 opacity-50" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search..."
-                className="w-full bg-transparent px-3 py-3 outline-none"
-              />
-            </form>
-
-            <div className="grid gap-1">
-              {[
-                ["/", "Home"],
-                ["/shop", "Shop"],
-                ["/categories", "Categories"],
-                ["/wishlist", "Wishlist"],
-                ["/orders", "Orders"],
-                ["/account", "Account"],
-                ["/contact", "Contact"],
-              ].map(([href, label]) => (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={() => setMenu(false)}
-                  className="rounded-xl px-3 py-3 font-medium hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  {label}
-                </Link>
-              ))}
+        {menuOpen && (
+          <div className="border-t border-black/10 px-4 py-5 dark:border-white/10 md:hidden">
+            <div className="grid gap-4">
+              <Link href="/shop">Shop</Link>
+              <Link href="/categories">Categories</Link>
+              <Link href="/wishlist">Wishlist</Link>
+              <Link href="/orders">Orders</Link>
+              <Link href="/account">Account</Link>
+              <Link href="/contact">Contact</Link>
             </div>
           </div>
         )}
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-24 pt-5 md:px-6 md:pb-12">
-        {children}
-      </main>
+      <main>{children}</main>
 
-      <footer className="border-t border-black/10 dark:border-white/10">
+      <footer className="mt-20 border-t border-black/10 dark:border-white/10">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-4 md:px-6">
           <div>
-            <div className="text-xl font-black">
-              JAO<span className="opacity-40">LAB</span>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-xs font-bold text-white dark:bg-white dark:text-black">
+                JL
+              </div>
+
+              <span className="font-semibold">
+                Jao Lab
+              </span>
             </div>
-            <p className="mt-3 max-w-xs text-sm leading-6 opacity-60">
-              Fashion, accessories and everyday style. Discover pieces that
-              fit your story.
+
+            <p className="mt-4 max-w-xs text-sm leading-6 text-neutral-500">
+              Fashion, accessories and lifestyle pieces selected
+              for modern Nigerian shoppers.
             </p>
           </div>
 
           <div>
-            <p className="mb-4 text-sm font-bold">Explore</p>
-            <div className="grid gap-2 text-sm opacity-65">
+            <p className="text-sm font-semibold">
+              Explore
+            </p>
+
+            <div className="mt-4 grid gap-3 text-sm text-neutral-500">
               <Link href="/shop">Shop</Link>
               <Link href="/categories">Categories</Link>
               <Link href="/wishlist">Wishlist</Link>
@@ -325,864 +420,1073 @@ function Shell({
           </div>
 
           <div>
-            <p className="mb-4 text-sm font-bold">Support</p>
-            <div className="grid gap-2 text-sm opacity-65">
-              <Link href="/contact">Contact</Link>
-              <Link href="/account">My Account</Link>
-              <span>Nationwide delivery</span>
-              <span>Secure payments</span>
-            </div>
-          </div>
+            <p className="text-sm font-semibold">
+              Help
+            </p>
 
+            <div className="mt-4 grid
+                  <div>
+        <p className="text-sm font-semibold">
+          Contact
+        </p>
+
+        <div className="mt-4 grid gap-3 text-sm text-neutral-500">
+          <span className="flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            WhatsApp / Call
+          </span>
+
+          <span>
+            {contactConfig?.email ||
+              "Jao Lab Fashion & Styles"}
+          </span>
+
+          <span className="flex items-center gap-2">
+            <Instagram className="h-4 w-4" />
+            @raymonjao0
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div className="border-t border-black/10 px-4 py-5 text-center text-xs text-neutral-500 dark:border-white/10">
+      © {new Date().getFullYear()} Jao Lab Fashion &
+      Styles. All rights reserved.
+    </div>
+  </footer>
+
+  <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/10 bg-white/95 px-4 py-2 backdrop-blur-xl dark:border-white/10 md:hidden">
+    <div className="mx-auto flex max-w-md items-center justify-around">
+      <Link
+        href="/"
+        className="flex flex-col items-center gap-1 p-2 text-[10px]"
+      >
+        <HomeIcon className="h-5 w-5" />
+        Home
+      </Link>
+
+      <Link
+        href="/shop"
+        className="flex flex-col items-center gap-1 p-2 text-[10px]"
+      >
+        <Search className="h-5 w-5" />
+        Shop
+      </Link>
+
+      <Link
+        href="/wishlist"
+        className="flex flex-col items-center gap-1 p-2 text-[10px]"
+      >
+        <Heart className="h-5 w-5" />
+        Wishlist
+      </Link>
+
+      <Link
+        href="/account"
+        className="flex flex-col items-center gap-1 p-2 text-[10px]"
+      >
+        <UserRound className="h-5 w-5" />
+        Account
+      </Link>
+    </div>
+  </div>
+</div>
+    function ProductCard({
+  product,
+  onWishlist,
+}: {
+  product: Product;
+  onWishlist?: () => void;
+}) {
+  const [liked, setLiked] = useState(false);
+
+  const addToCart = () => {
+    const existing = JSON.parse(
+      localStorage.getItem("jao-cart") || "[]",
+    ) as Array<{
+      productId: string;
+      quantity: number;
+    }>;
+
+    const found = existing.find(
+      (item) => item.productId === product.id,
+    );
+
+    if (found) {
+      found.quantity += 1;
+    } else {
+      existing.push({
+        productId: product.id,
+        quantity: 1,
+      });
+    }
+
+    localStorage.setItem("jao-cart", JSON.stringify(existing));
+    window.dispatchEvent(new Event("jao-cart-updated"));
+  };
+
+  return (
+    <div className="group overflow-hidden rounded-3xl border border-black/10 bg-white dark:border-white/10 dark:bg-neutral-950">
+      <div className="relative aspect-[4/5] overflow-hidden bg-neutral-100 dark:bg-neutral-900">
+        <img
+          src={img(product)}
+          alt={product.name}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+        />
+
+        <button
+          type="button"
+          onClick={() => {
+            setLiked((value) => !value);
+            onWishlist?.();
+          }}
+          className="absolute right-3 top-3 rounded-full bg-white/90 p-2 shadow-sm backdrop-blur dark:bg-black/70"
+          aria-label="Wishlist"
+        >
+          <Heart
+            className={`h-5 w-5 ${
+              liked ? "fill-current" : ""
+            }`}
+          />
+        </button>
+
+        {product.discount ? (
+          <div className="absolute left-3 top-3 rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">
+            -{product.discount}%
+          </div>
+        ) : null}
+      </div>
+
+      <div className="p-4">
+        <p className="mb-1 text-xs uppercase tracking-[0.18em] text-neutral-500">
+          JAO LAB
+        </p>
+
+        <h3 className="line-clamp-2 min-h-[2.8rem] text-sm font-semibold">
+          {product.name}
+        </h3>
+
+        <div className="mt-3 flex items-center justify-between gap-3">
           <div>
-            <p className="mb-4 text-sm font-bold">Contact</p>
-            <div className="grid gap-3 text-sm opacity-65">
-              <span>📱 WhatsApp</span>
-              <span>☎️ Call</span>
-              <span>✉️ {contactConfig?.email || "Jao Lab Fashion & Styles"}</span>
-            </div>
+            <p className="text-lg font-bold">
+              {money(Number(product.price || 0))}
+            </p>
+
+            {product.originalPrice ? (
+              <p className="text-xs text-neutral-400 line-through">
+                {money(Number(product.originalPrice))}
+              </p>
+            ) : null}
           </div>
-        </div>
 
-        <div className="border-t border-black/10 px-4 py-5 text-center text-xs opacity-50 dark:border-white/10">
-          © {new Date().getFullYear()} Jao Lab Fashion & Styles. All rights
-          reserved.
-        </div>
-      </footer>
-
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-black/10 bg-[#f7f7f5]/95 px-4 py-2 backdrop-blur-xl dark:border-white/10 dark:bg-[#090909]/95 md:hidden">
-        <div className="mx-auto flex max-w-md items-center justify-around">
-          <Link href="/" className="flex flex-col items-center gap-1 p-2 text-[10px]">
-            <HomeIcon className="h-5 w-5" />
-            Home
-          </Link>
-          <Link href="/shop" className="flex flex-col items-center gap-1 p-2 text-[10px]">
-            <Search className="h-5 w-5" />
-            Shop
-          </Link>
-          <Link href="/wishlist" className="flex flex-col items-center gap-1 p-2 text-[10px]">
-            <Heart className="h-5 w-5" />
-            Saved
-          </Link>
-          <Link href="/orders" className="flex flex-col items-center gap-1 p-2 text-[10px]">
-            <Package className="h-5 w-5" />
-            Orders
-          </Link>
-          <Link href="/account" className="flex flex-col items-center gap-1 p-2 text-[10px]">
-            <UserRound className="h-5 w-5" />
-            Account
-          </Link>
+          <button
+            type="button"
+            onClick={addToCart}
+            className="rounded-full bg-black px-4 py-2 text-xs font-semibold text-white dark:bg-white dark:text-black"
+          >
+            Add
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function ProductCard({
-  product,
-  index = 0,
-}: {
-  product: Product;
-  index?: number;
-}) {
-  const { user } = useAuth();
-  const { data: wishlist } = useGetWishlist({
-    query: { enabled: !!user },
-  } as any);
-
-  const addWishlist = useAddWishlistItem();
-  const removeWishlist = useRemoveWishlistItem();
-
-  const [liked, setLiked] = useState(false);
-
-  const productId = (product as any).id;
-
-  useEffect(() => {
-    const items = (wishlist as any)?.items || [];
-    setLiked(
-      items.some(
-        (item: any) =>
-          item.productId === productId || item.product?.id === productId
-      )
-    );
-  }, [wishlist, productId]);
-
-  async function toggleWishlist(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!user) return;
-
-    try {
-      if (liked) {
-        await (removeWishlist as any).mutateAsync({
-          productId,
-        });
-        setLiked(false);
-      } else {
-        await (addWishlist as any).mutateAsync({
-          productId,
-        });
-        setLiked(true);
-      }
-    } catch {
-      // Keep UI stable if backend rejects duplicate requests.
-    }
-  }
-
-  const price = Number(
-    (product as any).price ||
-      (product as any).salePrice ||
-      (product as any).amount ||
-      0
-  );
-
-  const oldPrice = Number(
-    (product as any).compareAtPrice ||
-      (product as any).originalPrice ||
-      0
-  );
-
-  const discount =
-    oldPrice > price ? Math.round(((oldPrice - price) / oldPrice) * 100) : 0;
-
-  return (
-    <Link href={`/product/${productId}`} className="group block">
-      <div className="relative overflow-hidden rounded-2xl bg-black/[0.04] dark:bg-white/[0.04]">
-        <div className="aspect-[4/5] overflow-hidden">
-          <img
-            src={getImage(product, index)}
-            alt={(product as any).name || "Jao Lab product"}
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-          />
-        </div>
-
-        {discount > 0 && (
-          <span className="absolute left-3 top-3 rounded-full bg-black px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-black">
-            -{discount}%
-          </span>
-        )}
-
-        <button
-          onClick={toggleWishlist}
-          className="absolute right-3 top-3 rounded-full bg-white/90 p-2 text-black shadow-sm backdrop-blur dark:bg-black/80 dark:text-white"
-        >
-          <Heart
-            className={`h-4 w-4 ${liked ? "fill-current" : ""}`}
-          />
-        </button>
-      </div>
-
-      <div className="px-1 pt-3">
-        <h3 className="line-clamp-1 text-sm font-semibold">
-          {(product as any).name || "Jao Lab Product"}
-        </h3>
-
-        <div className="mt-1 flex items-center gap-2">
-          <span className="font-bold">{money(price)}</span>
-
-          {oldPrice > price && (
-            <span className="text-xs line-through opacity-40">
-              {money(oldPrice)}
-            </span>
-          )}
-        </div>
-
-        <div className="mt-2 flex items-center gap-1 text-[11px] opacity-55">
-          <Star className="h-3 w-3 fill-current" />
-          <span>{(product as any).rating || "New"}</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 function Home() {
-  const { data, isLoading } = useGetHome();
+  const { data, isLoading, error } = useGetHome();
 
-  if (isLoading) return <Loading />;
-
-  const home: any = data || {};
-  const featured: Product[] =
-    home.featuredProducts ||
-    home.featured ||
-    home.products ||
-    [];
-
-  const newest: Product[] =
-    home.newestProducts ||
-    home.newest ||
-    [];
-
-  const categories: Category[] =
-    home.categories || [];
+  const featured = data?.featured || [];
+  const newest = data?.newest || [];
+  const categories = data?.categories || [];
 
   return (
-    <div>
-      <section className="relative overflow-hidden rounded-[2rem] bg-black text-white">
-        <div className="absolute inset-0">
-          <img
-            src={fallbackImages[0]}
-            className="h-full w-full object-cover opacity-45"
-            alt=""
-          />
-        </div>
+    <Shell>
+      <main>
+        <section className="border-b border-black/10 dark:border-white/10">
+          <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 md:grid-cols-2 md:items-center md:px-6 md:py-24">
+            <div>
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+                Jao Lab Fashion & Styles
+              </p>
 
-        <div className="relative grid min-h-[520px] items-end p-7 md:min-h-[600px] md:p-12">
-          <div className="max-w-2xl">
-            <div className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] opacity-75">
-              <Sparkles className="h-4 w-4" />
-              Jao Lab Fashion & Styles
+              <h1 className="max-w-3xl text-5xl font-black tracking-tight md:text-7xl">
+                Wear your story.
+              </h1>
+
+              <p className="mt-6 max-w-xl text-base leading-7 text-neutral-600 dark:text-neutral-400 md:text-lg">
+                Discover fashion, accessories and everyday style
+                essentials built for modern life.
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  href="/shop"
+                  className="rounded-full bg-black px-6 py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
+                >
+                  Shop now
+                  <ArrowRight className="ml-2 inline h-4 w-4" />
+                </Link>
+
+                <Link
+                  href="/categories"
+                  className="rounded-full border border-black/10 px-6 py-3 text-sm font-semibold dark:border-white/10"
+                >
+                  Explore categories
+                </Link>
+              </div>
             </div>
 
-            <h1 className="text-5xl font-black leading-[0.9] tracking-[-0.05em] md:text-8xl">
-              Wear
-              <br />
-              your story.
-            </h1>
+            <div className="relative overflow-hidden rounded-[2rem] bg-neutral-100 dark:bg-neutral-900">
+              <img
+                src={fallbackImages[0]}
+                alt="Jao Lab fashion"
+                className="aspect-[4/5] h-full w-full object-cover"
+              />
 
-            <p className="mt-6 max-w-md text-sm leading-6 text-white/70 md:text-base">
-              Discover fashion and accessories selected for people who want
-              their everyday style to stand out.
-            </p>
+              <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white/90 p-4 backdrop-blur dark:bg-black/75">
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                  JAO PLAN
+                </p>
+                <p className="mt-1 text-lg font-bold">
+                  Flexible ways to pay
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+        <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-black/10 p-6 dark:border-white/10">
+              <Sparkles className="h-6 w-6" />
+              <h3 className="mt-4 font-bold">
+                Fresh styles
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-neutral-500">
+                Discover new fashion and lifestyle pieces.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-black/10 p-6 dark:border-white/10">
+              <Truck className="h-6 w-6" />
+              <h3 className="mt-4 font-bold">
+                Nationwide delivery
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-neutral-500">
+                Get your orders delivered to your preferred address.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-black/10 p-6 dark:border-white/10">
+              <CreditCard className="h-6 w-6" />
+              <h3 className="mt-4 font-bold">
+                Flexible payment
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-neutral-500">
+                Pay in full or choose an available JAO PLAN.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
+          <SectionTitle
+            eyebrow="Featured"
+            title="Popular right now"
+            action={
               <Link
                 href="/shop"
-                className="rounded-full bg-white px-6 py-3 text-sm font-bold text-black"
+                className="text-sm font-semibold"
               >
-                Shop now
+                View all
+                <ArrowRight className="ml-1 inline h-4 w-4" />
               </Link>
+            }
+          />
+
+          {isLoading ? (
+            <Loading />
+          ) : error ? (
+            <QueryError />
+          ) : featured.length ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {featured.slice(0, 8).map((product: Product) => (
+                <Link
+                  key={product.id}
+                  href={`/product/${product.id}`}
+                >
+                  <ProductCard product={product} />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Empty message="No featured products yet." />
+          )}
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
+          <SectionTitle
+            eyebrow="New arrivals"
+            title="Fresh from Jao Lab"
+            action={
+              <Link
+                href="/shop"
+                className="text-sm font-semibold"
+              >
+                Shop everything
+              </Link>
+            }
+          />
+
+          {newest.length ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {newest.slice(0, 8).map((product: Product) => (
+                <Link
+                  key={product.id}
+                  href={`/product/${product.id}`}
+                >
+                  <ProductCard product={product} />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Empty message="No new products yet." />
+          )}
+        </section>
+
+        <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
+          <div className="rounded-[2rem] bg-black p-8 text-white md:p-12 dark:bg-white dark:text-black">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] opacity-60">
+                JAO PLAN
+              </p>
+
+              <h2 className="mt-3 text-3xl font-black md:text-5xl">
+                Good things, in flexible payments.
+              </h2>
+
+              <p className="mt-4 max-w-xl text-sm leading-7 opacity-70 md:text-base">
+                Choose an eligible product and select an available
+                installment option during your purchase.
+              </p>
 
               <Link
-                href="/categories"
-                className="rounded-full border border-white/30 px-6 py-3 text-sm font-bold"
+                href="/shop"
+                className="mt-7 inline-flex rounded-full bg-white px-6 py-3 text-sm font-semibold text-black dark:bg-black dark:text-white"
               >
-                Explore categories
+                Explore products
               </Link>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="mt-5 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
-          <Truck className="mb-4 h-5 w-5" />
-          <h3 className="font-bold">Nationwide delivery</h3>
-          <p className="mt-1 text-xs opacity-55">
-            Get your order delivered to your location.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
-          <WalletCards className="mb-4 h-5 w-5" />
-          <h3 className="font-bold">Flexible payment</h3>
-          <p className="mt-1 text-xs opacity-55">
-            Pay in full or choose an available JAO Plan.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.04]">
-          <ShieldCheck className="mb-4 h-5 w-5" />
-          <h3 className="font-bold">Secure shopping</h3>
-          <p className="mt-1 text-xs opacity-55">
-            Your account and orders stay protected.
-          </p>
-        </div>
-      </section>
-
-      {categories.length > 0 && (
-        <section className="mt-16">
+        <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
           <SectionTitle
-            eyebrow="Browse"
+            eyebrow="Explore"
             title="Shop by category"
-            link="/categories"
           />
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {categories.slice(0, 8).map((category: any, index) => (
-              <Link
-                key={category.id || index}
-                href={`/shop?category=${encodeURIComponent(
-                  category.slug || category.name || ""
-                )}`}
-                className="group relative aspect-square overflow-hidden rounded-2xl bg-black"
-              >
-                <img
-                  src={getImage(category, index)}
-                  alt={category.name}
-                  className="h-full w-full object-cover opacity-70 transition duration-500 group-hover:scale-105"
-                />
+          {categories.length ? (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {categories.slice(0, 8).map((category: Category) => (
+                <Link
+                  key={category.id}
+                  href={`/shop?category=${category.id}`}
+                  className="group overflow-hidden rounded-3xl border border-black/10 dark:border-white/10"
+                >
+                  <img
+                    src={img(category)}
+                    alt={category.name}
+                    className="aspect-square w-full object-cover transition duration-500 group-hover:scale-105"
+                  />
 
-                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 to-transparent p-4">
-                  <span className="font-bold text-white">
-                    {category.name}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {featured.length > 0 && (
-        <section className="mt-16">
-          <SectionTitle
-            eyebrow="Trending"
-            title="Featured picks"
-            link="/shop"
-          />
-
-          <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4">
-            {featured.slice(0, 8).map((product, index) => (
-              <ProductCard
-                key={(product as any).id || index}
-                product={product}
-                index={index}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {newest.length > 0 && (
-        <section className="mt-16">
-          <SectionTitle
-            eyebrow="Just in"
-            title="New arrivals"
-            link="/shop"
-          />
-
-          <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4">
-            {newest.slice(0, 8).map((product, index) => (
-              <ProductCard
-                key={(product as any).id || index}
-                product={product}
-                index={index + 2}
-              />
-          ))}
-        </div>
-      </section>
-    )}
-
-    <section className="mt-16 overflow-hidden rounded-[2rem] bg-black p-8 text-white md:p-12">
-      <div className="max-w-2xl">
-        <p className="text-xs uppercase tracking-[0.25em] text-white/60">
-          JAO PLAN
-        </p>
-        <h2 className="mt-3 text-3xl font-semibold md:text-5xl">
-          Good things, in three.
-        </h2>
-        <p className="mt-4 max-w-xl text-white/70">
-          Pay one third today, then complete the remaining payments according
-          to your selected installment plan.
-        </p>
-        <Link
-          href="/shop"
-          className="mt-7 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black"
-        >
-          Shop with JAO PLAN
-          <ArrowRight className="h-4 w-4" />
-        </Link>
-      </div>
-    </section>
-
-    <section className="mt-16">
-      <SectionTitle
-        eyebrow="Categories"
-        title="Explore the edit"
-        link="/categories"
-      />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {data.categories?.slice(0, 4).map((category, index) => (
-          <Link
-            key={(category as any).id || index}
-            href={`/shop?category=${encodeURIComponent(
-              (category as any).slug || (category as any).name || ""
-            )}`}
-            className="group overflow-hidden rounded-[1.5rem] bg-neutral-100"
-          >
-            <div className="aspect-[4/5] overflow-hidden">
-              <img
-                src={img(category, index)}
-                alt={(category as any).name || "Category"}
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-              />
+                  <div className="p-4">
+                    <p className="font-semibold">
+                      {category.name}
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Explore collection
+                    </p>
+                  </div>
+                </Link>
+              ))}
             </div>
-            <div className="flex items-center justify-between p-4">
-              <span className="font-medium">
-                {(category as any).name}
-              </span>
-              <ArrowUpRight className="h-4 w-4" />
-            </div>
-          </Link>
-        ))}
-      </div>
-    </section>
-  </main>
-);
+          ) : (
+            <Empty message="No categories available yet." />
+          )}
+        </section>
+      </main>
+    </Shell>
+  );
+        }
+  function Shop() {
+  const [search, setSearch] = useState("");
 
-function Shop() {
   const { data, isLoading, error } = useListProducts();
-  const products = data?.products || [];
+
+  const products = Array.isArray(data)
+    ? data
+    : data?.items || data?.products || [];
+
+  const filtered = products.filter((product: Product) =>
+    product.name
+      ?.toLowerCase()
+      .includes(search.toLowerCase()),
+  );
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
-      <SectionTitle
-        eyebrow="Shop"
-        title="The Jao Lab edit"
-      />
+    <Shell>
+      <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
+        <div className="mb-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+            Jao Lab
+          </p>
 
-      {isLoading && <Loading />}
+          <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">
+            Shop
+          </h1>
 
-      {error && <QueryError message="Unable to load products." />}
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-neutral-500 md:text-base">
+            Explore fashion, accessories and lifestyle products
+            from Jao Lab Fashion & Styles.
+          </p>
+        </div>
 
-      {!isLoading && !error && products.length === 0 && (
-        <Empty title="No products yet" />
-      )}
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-        {products.map((product, index) => (
-          <ProductCard
-            key={(product as any).id || index}
-            product={product}
-            index={index}
-          />
-        ))}
-      </div>
-    </main>
+            <input
+              value={search}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
+              placeholder="Search products..."
+              className="h-12 w-full rounded-full border border-black/10 bg-transparent pl-12 pr-4 outline-none focus:border-black dark:border-white/10 dark:focus:border-white"
+            />
+          </div>
+
+          <button
+            type="button"
+            className="flex h-12 items-center justify-center gap-2 rounded-full border border-black/10 px-5 text-sm font-semibold dark:border-white/10"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+          </button>
+        </div>
+
+        {isLoading ? (
+          <Loading />
+        ) : error ? (
+          <QueryError />
+        ) : filtered.length ? (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            {filtered.map((product: Product) => (
+              <Link
+                key={product.id}
+                href={`/product/${product.id}`}
+              >
+                <ProductCard product={product} />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <Empty message="No products found." />
+        )}
+      </main>
+    </Shell>
   );
 }
 
 function ProductPage() {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading, error } = useGetProduct(id);
 
-  const product = data?.product;
+  const { data: product, isLoading, error } = useGetProduct(
+    id,
+  );
 
-  if (isLoading) return <Loading />;
-  if (error || !product) {
-    return <QueryError message="Product could not be found." />;
+  const addToCart = () => {
+    if (!product) return;
+
+    const existing = JSON.parse(
+      localStorage.getItem("jao-cart") || "[]",
+    ) as Array<{
+      productId: string;
+      quantity: number;
+    }>;
+
+    const found = existing.find(
+      (item) => item.productId === product.id,
+    );
+
+    if (found) {
+      found.quantity += 1;
+    } else {
+      existing.push({
+        productId: product.id,
+        quantity: 1,
+      });
+    }
+
+    localStorage.setItem("jao-cart", JSON.stringify(existing));
+    window.dispatchEvent(new Event("jao-cart-updated"));
+  };
+
+  if (isLoading) {
+    return (
+      <Shell>
+        <Loading />
+      </Shell>
+    );
   }
 
-  return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
-      <div className="grid gap-8 md:grid-cols-2">
-        <div className="overflow-hidden rounded-[2rem] bg-neutral-100">
-          <img
-            src={img(product, 0)}
-            alt={product.name}
-            className="aspect-square h-full w-full object-cover"
-          />
-        </div>
+  if (error || !product) {
+          if (error || !product) {
+        return (
+          <Shell>
+            <QueryError />
+          </Shell>
+        );
+      }
 
-        <div className="flex flex-col justify-center">
-          <p className="text-xs uppercase tracking-[0.25em] text-neutral-500">
-            JAO LAB
+      return (
+        <Shell>
+          <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
+            <div className="grid gap-10 md:grid-cols-2">
+              <div className="overflow-hidden rounded-[2rem] bg-neutral-100 dark:bg-neutral-900">
+                <img
+                  src={img(product)}
+                  alt={product.name}
+                  className="aspect-square h-full w-full object-cover"
+                />
+              </div>
+
+              <div className="flex flex-col justify-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+                  JAO LAB
+                </p>
+
+                <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
+                  {product.name}
+                </h1>
+
+                <p className="mt-5 text-3xl font-bold">
+                  {money(Number(product.price || 0))}
+                </p>
+
+                {product.description ? (
+                  <p className="mt-6 text-sm leading-7 text-neutral-600 dark:text-neutral-400">
+                    {product.description}
+                  </p>
+                ) : null}
+
+                <div className="mt-8 grid gap-3">
+                  <button
+                    type="button"
+                    onClick={addToCart}
+                    className="flex h-12 items-center justify-center gap-2 rounded-full bg-black px-6 text-sm font-semibold text-white dark:bg-white dark:text-black"
+                  >
+                    <ShoppingBag className="h-5 w-5" />
+                    Add to cart
+                  </button>
+
+                  <button
+                    type="button"
+                    className="flex h-12 items-center justify-center gap-2 rounded-full border border-black/10 px-6 text-sm font-semibold dark:border-white/10"
+                  >
+                    Start Installment Plan
+                  </button>
+                </div>
+
+                <div className="mt-8 grid gap-3 border-t border-black/10 pt-6 text-sm dark:border-white/10">
+                  <div className="flex items-center gap-3">
+                    <ShieldCheck className="h-5 w-5" />
+                    Secure shopping
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Truck className="h-5 w-5" />
+                    Delivery available
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <CreditCard className="h-5 w-5" />
+                    Flexible payment options
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        </Shell>
+      );
+        }
+  function CategoriesPage() {
+  const { data, isLoading, error } = useListCategories();
+
+  const categories = Array.isArray(data)
+    ? data
+    : data?.items || data?.categories || [];
+
+  return (
+    <Shell>
+      <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
+        <div className="mb-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+            Explore
           </p>
 
-          <h1 className="mt-3 text-3xl font-semibold md:text-5xl">
-            {product.name}
+          <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">
+            Categories
           </h1>
-
-          <p className="mt-5 text-2xl font-medium">
-            {money(Number(product.price || 0))}
-          </p>
-
-          {product.description && (
-            <p className="mt-6 leading-7 text-neutral-600">
-              {product.description}
-            </p>
-          )}
-
-          <div className="mt-8 grid gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                const cart = JSON.parse(
-                  localStorage.getItem("jao-lab-cart") || "[]"
-                );
-
-                const existing = cart.find(
-                  (item: any) => item.productId === (product as any).id
-                );
-
-                if (existing) {
-                  existing.quantity += 1;
-                } else {
-                  cart.push({
-                    productId: (product as any).id,
-                    product,
-                    quantity: 1,
-                  });
-                }
-
-                localStorage.setItem(
-                  "jao-lab-cart",
-                  JSON.stringify(cart)
-                );
-
-                window.dispatchEvent(new Event("storage"));
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-medium text-white"
-            >
-              <ShoppingBag className="h-4 w-4" />
-              Add to cart
-            </button>
-
-            <Link
-              href="/cart"
-              className="flex w-full items-center justify-center rounded-full border border-black px-6 py-4 text-sm font-medium"
-            >
-              View cart
-            </Link>
-          </div>
-
-          <div className="mt-8 grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl bg-neutral-100 p-4">
-              <ShieldCheck className="h-5 w-5" />
-              <p className="mt-3 text-sm font-medium">
-                Secure checkout
-              </p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Multiple payment options available.
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-neutral-100 p-4">
-              <WalletCards className="h-5 w-5" />
-              <p className="mt-3 text-sm font-medium">
-                JAO PLAN
-              </p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Choose an installment option during checkout.
-              </p>
-            </div>
-          </div>
         </div>
-      </div>
-    </main>
-  );
-}
 
-function CategoriesPage() {
-  const { data, isLoading } = useListCategories();
-  const categories = data?.categories || [];
+        {isLoading ? (
+          <Loading />
+        ) : error ? (
+          <QueryError />
+        ) : categories.length ? (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            {categories.map((category: Category) => (
+              <Link
+                key={category.id}
+                href={`/shop?category=${category.id}`}
+                className="group overflow-hidden rounded-3xl border border-black/10 dark:border-white/10"
+              >
+                <img
+                  src={img(category)}
+                  alt={category.name}
+                  className="aspect-square w-full object-cover transition duration-500 group-hover:scale-105"
+                />
 
-  return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
-      <SectionTitle
-        eyebrow="Categories"
-        title="Shop by category"
-      />
+                <div className="p-5">
+                  <h2 className="font-bold">
+                    {category.name}
+                  </h2>
 
-      {isLoading && <Loading />}
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {categories.map((category, index) => (
-          <Link
-            key={(category as any).id || index}
-            href={`/shop?category=${encodeURIComponent(
-              (category as any).slug || (category as any).name || ""
-            )}`}
-            className="group overflow-hidden rounded-[1.5rem] bg-neutral-100"
-          >
-            <div className="aspect-[4/5] overflow-hidden">
-              <img
-                src={img(category, index)}
-                alt={(category as any).name || "Category"}
-                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-              />
-            </div>
-
-            <div className="p-4 font-medium">
-              {(category as any).name}
-            </div>
-          </Link>
-        ))}
-      </div>
-    </main>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    Explore collection
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <Empty message="No categories available yet." />
+        )}
+      </main>
+    </Shell>
   );
 }
 
 function WishlistPage() {
-  const { user } = useAuth();
+  const { data, isLoading, error } = useGetWishlist();
 
-  if (!user) {
-    return (
-      <main className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <Heart className="mx-auto h-10 w-10" />
-        <h1 className="mt-5 text-2xl font-semibold">
-          Sign in to view your wishlist
-        </h1>
-        <Link
-          href="/login"
-          className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-sm text-white"
-        >
-          Sign in
-        </Link>
-      </main>
-    );
-  }
-
-  const { data, isLoading } = useGetWishlist();
-
-  const items = data?.items || [];
+  const items = Array.isArray(data)
+    ? data
+    : data?.items || data?.products || [];
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
-      <SectionTitle
-        eyebrow="Saved"
-        title="Your wishlist"
-      />
+    <Shell>
+      <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
+        <div className="mb-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+            Saved
+          </p>
 
-      {isLoading && <Loading />}
+          <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">
+            Wishlist
+          </h1>
+        </div>
 
-      {!isLoading && items.length === 0 && (
-        <Empty title="Your wishlist is empty" />
-      )}
+        {isLoading ? (
+          <Loading />
+        ) : error ? (
+          <QueryError />
+        ) : items.length ? (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            {items.map((item: any) => {
+              const product = item.product || item;
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {items.map((item: any, index: number) => (
-          <ProductCard
-            key={item.id || index}
-            product={item.product || item}
-            index={index}
-          />
-        ))}
-      </div>
-    </main>
+              return (
+                <Link
+                  key={product.id}
+                  href={`/product/${product.id}`}
+                >
+                  <ProductCard product={product} />
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <Empty message="Your wishlist is empty." />
+        )}
+      </main>
+    </Shell>
   );
 }
 
 function OrdersPage() {
-  const { user } = useAuth();
-
-  if (!user) {
-    return (
-      <main className="mx-auto max-w-2xl px-4 py-20 text-center">
-        <Package className="mx-auto h-10 w-10" />
-        <h1 className="mt-5 text-2xl font-semibold">
-          Sign in to view your orders
-        </h1>
-        <Link
-          href="/login"
-          className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-sm text-white"
-        >
-          Sign in
-        </Link>
-      </main>
-    );
-  }
-
   const { data, isLoading, error } = useListOrders();
 
-  const orders = data?.orders || [];
+  const orders = Array.isArray(data)
+    ? data
+    : data?.items || data?.orders || [];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 md:px-6 md:py-12">
-      <SectionTitle
-        eyebrow="Account"
-        title="Your orders"
-      />
+    <Shell>
+      <main className="mx-auto max-w-5xl px-4 py-10 md:px-6 md:py-14">
+        <div className="mb-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+            Account
+          </p>
 
-      {isLoading && <Loading />}
+          <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">
+            Orders
+          </h1>
+        </div>
 
-      {error && <QueryError message="Unable to load orders." />}
+        {isLoading ? (
+          <Loading />
+        ) : error ? (
+          <QueryError />
+        ) : orders.length ? (
+          <div className="grid gap-4">
+            {orders.map((order: Order) => (
+              <div
+                key={order.id}
+                className="rounded-3xl border border-black/10 p-5 dark:border-white/10"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                      Order
+                    </p>
 
-      {!isLoading && !error && orders.length === 0 && (
-        <Empty title="No orders yet" />
-      )}
+                    <p className="mt-1 font-bold">
+                      {order.id}
+                    </p>
+                  </div>
 
-      <div className="space-y-4">
-        {orders.map((order: any, index: number) => (
-          <div
-            key={order.id || order.orderNumber || index}
-            className="rounded-3xl border border-neutral-200 p-5"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
-                  Order
-                </p>
-                <p className="mt-1 font-medium">
-                  {order.orderNumber || order.id}
-                </p>
+                  <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold dark:bg-neutral-900">
+                    {String(order.status || "Pending")}
+                  </span>
+                </div>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs text-neutral-500">
+                      Total
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {money(Number(order.total || 0))}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-neutral-500">
+                      Payment
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {String(
+                        order.paymentMethod || "Not specified",
+                      )}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-neutral-500">
+                      Tracking
+                    </p>
+                    <p className="mt-1 font-semibold">
+                      {String(
+                        order.trackingNumber || "Pending",
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {order.installmentFrequency ? (
+                  <div className="mt-5 rounded-2xl bg-neutral-100 p-4 dark:bg-neutral-900">
+                    <p className="text-xs uppercase tracking-[0.15em] text-neutral-500">
+                      JAO PLAN
+                    </p>
+
+                    <p className="mt-2 text-sm font-semibold">
+                      {String(order.installmentFrequency)}
+                    </p>
+
+                    {order.nextPayment ? (
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Next payment:{" "}
+                        {String(order.nextPayment)}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-
-              <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs">
-                {order.status || "Pending"}
-              </span>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between">
-              <span className="text-sm text-neutral-500">
-                Total
-              </span>
-              <span className="font-semibold">
-                {money(Number(order.total || order.totalAmount || 0))}
-              </span>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </main>
+        ) : (
+          <Empty message="You have no orders yet." />
+        )}
+      </main>
+    </Shell>
   );
-}
+                  }
+  function CartPage() {
+  const [cart, setCart] = useState<
+    Array<{
+      productId: string;
+      quantity: number;
+    }>
+  >([]);
 
-function CartPage() {
-  const [cart, setCart] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadCart = () => {
+    const loadCart = async () => {
       try {
-        setCart(
-          JSON.parse(
-            localStorage.getItem("jao-lab-cart") || "[]"
-          )
-        );
-      } catch {
-        setCart([]);
+        const saved = JSON.parse(
+          localStorage.getItem("jao-cart") || "[]",
+        ) as Array<{
+          productId: string;
+          quantity: number;
+        }>;
+
+        setCart(saved);
+
+        const results: Product[] = [];
+
+        for (const item of saved) {
+          try {
+            const response = await fetch(
+              `${import.meta.env.VITE_API_URL || "https://jao-lab-fashion-api.onrender.com"}/products/${item.productId}`,
+            );
+
+            if (response.ok) {
+              const product = await response.json();
+              results.push(product);
+            }
+          } catch {
+            // Ignore an unavailable product.
+          }
+        }
+
+        setProducts(results);
+      } finally {
+        setLoading(false);
       }
     };
 
     loadCart();
-    window.addEventListener("storage", loadCart);
-
-    return () => {
-      window.removeEventListener("storage", loadCart);
-    };
   }, []);
 
-  const total = cart.reduce(
-    (sum, item) =>
-      sum +
-      Number(item.product?.price || 0) *
-        Number(item.quantity || 1),
-    0
-  );
-
-  const updateQuantity = (index: number, quantity: number) => {
-    const next = [...cart];
-
-    if (quantity <= 0) {
-      next.splice(index, 1);
-    } else {
-      next[index] = {
-        ...next[index],
-        quantity,
-      };
-    }
+  const updateQuantity = (
+    productId: string,
+    quantity: number,
+  ) => {
+    const next = cart
+      .map((item) =>
+        item.productId === productId
+          ? {
+              ...item,
+              quantity,
+            }
+          : item,
+      )
+      .filter((item) => item.quantity > 0);
 
     setCart(next);
-    localStorage.setItem("jao-lab-cart", JSON.stringify(next));
+    localStorage.setItem("jao-cart", JSON.stringify(next));
+    window.dispatchEvent(new Event("jao-cart-updated"));
   };
 
+  const removeItem = (productId: string) => {
+    updateQuantity(productId, 0);
+  };
+
+  const total = cart.reduce((sum, item) => {
+    const product = products.find(
+      (p) => p.id === item.productId,
+    );
+
+    return (
+      sum +
+      Number(product?.price || 0) * item.quantity
+    );
+  }, 0);
+
+  if (loading) {
+    return (
+      <Shell>
+        <Loading />
+      </Shell>
+    );
+  }
+
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 md:px-6 md:py-12">
-      <SectionTitle
-        eyebrow="Shopping bag"
-        title="Your cart"
-      />
+    <Shell>
+      <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
+        <div className="mb-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+            Your selection
+          </p>
 
-      {cart.length === 0 ? (
-        <Empty title="Your cart is empty" />
-      ) : (
-        <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-          <div className="space-y-3">
-            {cart.map((item, index) => (
-              <div
-                key={item.product?.id || index}
-                className="flex gap-4 rounded-3xl border border-neutral-200 p-4"
-              >
-                <img
-                  src={img(item.product, index)}
-                  alt={item.product?.name || "Product"}
-                  className="h-28 w-24 rounded-2xl object-cover"
-                />
+          <h1 className="mt-2 text-4xl font-black tracking-tight md:text-6xl">
+            Cart
+          </h1>
+        </div>
 
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-medium">
-                    {item.product?.name}
-                  </h3>
+        {!cart.length ? (
+          <div className="rounded-[2rem] border border-black/10 p-10 text-center dark:border-white/10">
+            <ShoppingBag className="mx-auto h-10 w-10 text-neutral-400" />
 
-                  <p className="mt-1 text-sm text-neutral-500">
-                    {money(Number(item.product?.price || 0))}
-                  </p>
-
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateQuantity(
-                          index,
-                          Number(item.quantity || 1) - 1
-                        )
-                      }
-                      className="rounded-full border p-2"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-
-                    <span className="min-w-5 text-center text-sm">
-                      {item.quantity || 1}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateQuantity(
-                          index,
-                          Number(item.quantity || 1) + 1
-                        )
-                      }
-                      className="rounded-full border p-2"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="h-fit rounded-3xl bg-neutral-100 p-6">
-            <h2 className="text-xl font-semibold">
-              Order summary
+            <h2 className="mt-4 text-xl font-bold">
+              Your cart is empty
             </h2>
 
-            <div className="mt-6 flex justify-between">
-              <span className="text-neutral-500">Subtotal</span>
-              <span className="font-medium">{money(total)}</span>
-            </div>
-
-            <div className="mt-3 flex justify-between">
-              <span className="text-neutral-500">Delivery</span>
-              <span className="text-sm">Calculated at checkout</span>
-            </div>
-
-            <div className="my-5 border-t border-neutral-300" />
-
-            <div className="flex justify-between text-lg font-semibold">
-              <span>Total</span>
-              <span>{money(total)}</span>
-            </div>
+            <p className="mt-2 text-sm text-neutral-500">
+              Find something you like and add it to your cart.
+            </p>
 
             <Link
-              href="/login"
-              className="mt-6 flex w-full items-center justify-center rounded-full bg-black px-6 py-4 text-sm font-medium text-white"
+              href="/shop"
+              className="mt-6 inline-flex rounded-full bg-black px-6 py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
             >
-              Continue to checkout
+              Start shopping
             </Link>
-
-            <p className="mt-3 text-center text-xs text-neutral-500">
-              Installment options can be selected during checkout.
-            </p>
           </div>
-        </div>
-      )}
-    </main>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+            <div className="grid gap-4">
+              {cart.map((item) => {
+                const product = products.find(
+                  (p) => p.id === item.productId,
+                );
+
+                if (!product) return null;
+
+                return (
+                  <div
+                    key={item.productId}
+                    className="flex gap-4 rounded-3xl border border-black/10 p-4 dark:border-white/10"
+                  >
+                    <img
+                      src={img(product)}
+                      alt={product.name}
+                      className="h-28 w-24 rounded-2xl object-cover"
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <h2 className="font-bold">
+                        {product.name}
+                      </h2>
+
+                      <p className="mt-1 font-semibold">
+                        {money(Number(product.price || 0))}
+                      </p>
+
+                      <div className="mt-4 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(
+                              item.productId,
+                              item.quantity - 1,
+                            )
+                          }
+                          className="rounded-full border border-black/10 p-2 dark:border-white/10"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+
+                        <span className="min-w-8 text-center text-sm font-semibold">
+                          {item.quantity}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuantity(
+                              item.productId,
+                              item.quantity + 1,
+                            )
+                          }
+                          className="rounded-full border border-black/10 p-2 dark:border-white/10"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeItem(item.productId)
+                          }
+                          className="ml-3 text-xs font-semibold text-red-500"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <aside className="h-fit rounded-3xl border border-black/10 p-6 dark:border-white/10">
+              <h2 className="text-xl font-bold">
+                Order summary
+              </h2>
+
+              <div className="mt-6 flex items-center justify-between text-sm">
+                <span className="text-neutral-500">
+                  Subtotal
+                </span>
+
+                <span className="font-semibold">
+                  {money(total)}
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span className="text-neutral-500">
+                  Delivery
+                </span>
+
+                <span className="font-semibold">
+                  Calculated at checkout
+                </span>
+              </div>
+
+              <div className="my-6 border-t border-black/10 dark:border-white/10" />
+
+              <div className="flex items-center justify-between">
+                <span className="font-bold">
+                  Total
+                </span>
+
+                <span className="text-xl font-black">
+                  {money(total)}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="mt-6 flex h-12 w-full items-center justify-center rounded-full bg-black px-6 text-sm font-semibold text-white dark:bg-white dark:text-black"
+              >
+                Proceed to checkout
+              </button>
+
+              <p className="mt-4 text-center text-xs leading-5 text-neutral-500">
+                Payment methods and installment options will
+                appear during checkout.
+              </p>
+            </aside>
+          </div>
+        )}
+      </main>
+    </Shell>
   );
 }
 
@@ -1196,12 +1500,54 @@ function AppRoutes() {
       <Route path="/wishlist" component={WishlistPage} />
       <Route path="/orders" component={OrdersPage} />
       <Route path="/cart" component={CartPage} />
+
+      <Route path="/account">
+        <RequireAuth>
+          <AccountPage />
+        </RequireAuth>
+      </Route>
+
       <Route path="/login" component={LoginPage} />
-      <Route path="/account" component={AccountPage} />
       <Route path="/contact" component={ContactPage} />
-      <Route path="/admin" component={AdminPage} />
+      <Route path="/about">
+        <Shell>
+          <main className="mx-auto max-w-4xl px-4 py-16 md:px-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+              Jao Lab
+            </p>
+
+            <h1 className="mt-3 text-4xl font-black md:text-6xl">
+              Fashion with your story in it.
+            </h1>
+
+            <p className="mt-6 text-base leading-8 text-neutral-600 dark:text-neutral-400">
+              Jao Lab Fashion & Styles is built to make discovering
+              and shopping for fashion and lifestyle products simple,
+              modern and accessible.
+            </p>
+          </main>
+        </Shell>
+      </Route>
+
       <Route>
-        <Home />
+        <Shell>
+          <main className="mx-auto max-w-3xl px-4 py-20 text-center md:px-6">
+            <h1 className="text-5xl font-black">
+              Page not found
+            </h1>
+
+            <p className="mt-4 text-neutral-500">
+              The page you are looking for does not exist.
+            </p>
+
+            <Link
+              href="/"
+              className="mt-7 inline-flex rounded-full bg-black px-6 py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
+            >
+              Back home
+            </Link>
+          </main>
+        </Shell>
       </Route>
     </Switch>
   );
@@ -1210,19 +1556,14 @@ function AppRoutes() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ErrorBoundary>
+      <AuthProvider>
         <TooltipProvider>
-          <AuthProvider>
-            <WouterRouter>
-              <Shell>
-                <AppRoutes />
-              </Shell>
-            </WouterRouter>
-
-            <Toaster />
-          </AuthProvider>
+          <Toaster />
+          <WouterRouter>
+            <AppRoutes />
+          </WouterRouter>
         </TooltipProvider>
-      </ErrorBoundary>
+      </AuthProvider>
     </QueryClientProvider>
   );
-          }
+    }
