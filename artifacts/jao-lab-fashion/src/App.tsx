@@ -424,17 +424,23 @@ function Shell({
               Help
             </p>
 
-            <div className="mt-4 grid
-                  <div>
-        <p className="text-sm font-semibold">
-          Contact
-        </p>
+            <div className="mt-4 grid gap-3 text-sm">
+        <Link href="/shipping">Shipping & Returns</Link>
+        <Link href="/terms">Terms</Link>
+        <Link href="/faq">FAQs</Link>
+      </div>
+    </div>
 
-        <div className="mt-4 grid gap-3 text-sm text-neutral-500">
-          <span className="flex items-center gap-2">
-            <Phone className="h-4 w-4" />
-            WhatsApp / Call
-          </span>
+    <div>
+      <p className="text-sm font-semibold">
+        Contact
+      </p>
+      <div className="mt-4 grid gap-3 text-sm">
+        <span className="flex items-center gap-2">
+          <Phone className="h-4 w-4" />
+          WhatsApp / Call
+        </span>
+        <span>
 
           <span>
             {contactConfig?.email ||
