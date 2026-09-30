@@ -1,4 +1,9 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -6,37 +11,31 @@ import {
 
 import {
   ArrowRight,
-  ArrowUpRight,
-  ChevronDown,
+  CreditCard,
   Heart,
   Home as HomeIcon,
   Loader2,
   Menu,
   Minus,
-  Package,
+  Phone,
   Plus,
   Search,
+  ShieldCheck,
   ShoppingBag,
+  SlidersHorizontal,
   Sparkles,
   Truck,
   UserRound,
   X,
-  Check,
-  Instagram,
-  Phone,
-  ShieldCheck,
-  WalletCards,
 } from "lucide-react";
 
 import {
-  useAddWishlistItem,
   useGetHome,
   useGetProduct,
   useGetWishlist,
   useListCategories,
   useListOrders,
   useListProducts,
-  useRemoveWishlistItem,
 } from "@workspace/api-client-react";
 
 import type {
@@ -46,6 +45,7 @@ import type {
 
 import {
   Link,
+  Redirect,
   Route,
   Switch,
   Router as WouterRouter,
@@ -95,6 +95,75 @@ const getProductImage = (
   );
 };
 
+const img = (item: any, index = 0) => getProductImage(item, index);
+
+type Order = {
+  id: string | number;
+  status?: unknown;
+  total?: unknown;
+  paymentMethod?: unknown;
+  trackingNumber?: unknown;
+  installmentFrequency?: unknown;
+  nextPayment?: unknown;
+  [key: string]: unknown;
+};
+
+type CartItem = {
+  productId: string | number;
+  quantity: number;
+};
+
+const readCart = (): CartItem[] => {
+  try {
+    const parsed = JSON.parse(
+      localStorage.getItem("jao-cart") || "[]",
+    );
+
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const addProductToCart = (productId: string | number) => {
+  const existing = readCart();
+
+  const found = existing.find(
+    (item) => String(item.productId) === String(productId),
+  );
+
+  if (found) {
+    found.quantity += 1;
+  } else {
+    existing.push({
+      productId,
+      quantity: 1,
+    });
+  }
+
+  localStorage.setItem("jao-cart", JSON.stringify(existing));
+  window.dispatchEvent(new Event("jao-cart-updated"));
+};
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
 function useNotice() {
   const [message, setMessage] = useState("");
 
@@ -123,16 +192,20 @@ function Loading() {
 function Empty({
   title,
   description,
+  message,
 }: {
-  title: string;
+  title?: string;
   description?: string;
+  message?: string;
 }) {
+  const heading = title || message || "Nothing here yet";
+
   return (
     <div className="rounded-[2rem] border border-neutral-200 p-10 text-center">
       <ShoppingBag className="mx-auto h-8 w-8" />
 
       <h2 className="mt-4 text-xl font-semibold">
-        {title}
+        {heading}
       </h2>
 
       {description && (
@@ -160,10 +233,12 @@ function SectionTitle({
   eyebrow,
   title,
   link,
+  action,
 }: {
   eyebrow?: string;
   title: string;
   link?: string;
+  action?: ReactNode;
 }) {
   return (
     <div className="mb-6 flex items-end justify-between gap-4">
@@ -179,7 +254,9 @@ function SectionTitle({
         </h2>
       </div>
 
-      {link && (
+      {action ? (
+        action
+      ) : link ? (
         <Link
           href={link}
           className="flex items-center gap-1 text-sm font-medium"
@@ -187,7 +264,7 @@ function SectionTitle({
           View all
           <ArrowRight className="h-4 w-4" />
         </Link>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -424,189 +501,181 @@ function Shell({
               Help
             </p>
 
-            <div className="mt-4 grid gap-3 text-sm">
-        <Link href="/shipping">Shipping & Returns</Link>
-        <Link href="/terms">Terms</Link>
-        <Link href="/faq">FAQs</Link>
-      </div>
-    </div>
-
-    <div>
-        <p className="text-sm font-semibold">
-          Contact
-        </p>
-
-        <div className="mt-4 grid gap-3 text-sm text-neutral-500">
-          <span className="flex items-center gap-2">
-            <Phone className="h-4 w-4" />
-            WhatsApp / Call
-          </span>
-
-          <span>
-            {contactConfig?.email ||
-              "Jao Lab Fashion & Styles"}
-          </span>
-
-          <span className="flex items-center gap-2">
-            <Instagram className="h-4 w-4" />
-            @raymonjao0
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div className="border-t border-black/10 px-4 py-5 text-center text-xs text-neutral-500 dark:border-white/10">
-      © {new Date().getFullYear()} Jao Lab Fashion &
-      Styles. All rights reserved.
-    </div>
-  </footer>
-
-  <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/10 bg-white/95 px-4 py-2 backdrop-blur-xl dark:border-white/10 md:hidden">
-    <div className="mx-auto flex max-w-md items-center justify-around">
-      <Link
-        href="/"
-        className="flex flex-col items-center gap-1 p-2 text-[10px]"
-      >
-        <HomeIcon className="h-5 w-5" />
-        Home
-      </Link>
-
-      <Link
-        href="/shop"
-        className="flex flex-col items-center gap-1 p-2 text-[10px]"
-      >
-        <Search className="h-5 w-5" />
-        Shop
-      </Link>
-
-      <Link
-        href="/wishlist"
-        className="flex flex-col items-center gap-1 p-2 text-[10px]"
-      >
-        <Heart className="h-5 w-5" />
-        Wishlist
-      </Link>
-
-      <Link
-        href="/account"
-        className="flex flex-col items-center gap-1 p-2 text-[10px]"
-      >
-        <UserRound className="h-5 w-5" />
-        Account
-      </Link>
-    </div>
-  </div>
-  </div>
-);
-
-}
-function ProductCard({
-  product,
-  onWishlist,
-}: {
-  product: Product;
-  onWishlist?: () => void;
-}) {
-  const [liked, setLiked] = useState(false);
-
-  const addToCart = () => {
-    const existing = JSON.parse(
-      localStorage.getItem("jao-cart") || "[]",
-    ) as Array<{
-      productId: string;
-      quantity: number;
-    }>;
-
-    const found = existing.find(
-      (item) => item.productId === product.id,
-    );
-
-    if (found) {
-      found.quantity += 1;
-    } else {
-      existing.push({
-        productId: product.id,
-        quantity: 1,
-      });
-    }
-
-    localStorage.setItem("jao-cart", JSON.stringify(existing));
-    window.dispatchEvent(new Event("jao-cart-updated"));
-  };
-
-  return (
-    <div className="group overflow-hidden rounded-3xl border border-black/10 bg-white dark:border-white/10 dark:bg-neutral-950">
-      <div className="relative aspect-[4/5] overflow-hidden bg-neutral-100 dark:bg-neutral-900">
-        <img
-          src={img(product)}
-          alt={product.name}
-          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-        />
-
-        <button
-          type="button"
-          onClick={() => {
-            setLiked((value) => !value);
-            onWishlist?.();
-          }}
-          className="absolute right-3 top-3 rounded-full bg-white/90 p-2 shadow-sm backdrop-blur dark:bg-black/70"
-          aria-label="Wishlist"
-        >
-          <Heart
-            className={`h-5 w-5 ${
-              liked ? "fill-current" : ""
-            }`}
-          />
-        </button>
-
-        {product.discount ? (
-          <div className="absolute left-3 top-3 rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">
-            -{product.discount}%
+            <div className="mt-4 grid gap-3 text-sm text-neutral-500">
+              <Link href="/shipping">Shipping &amp; Returns</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/faq">FAQs</Link>
+            </div>
           </div>
-        ) : null}
-      </div>
 
-      <div className="p-4">
-        <p className="mb-1 text-xs uppercase tracking-[0.18em] text-neutral-500">
-          JAO LAB
-        </p>
-
-        <h3 className="line-clamp-2 min-h-[2.8rem] text-sm font-semibold">
-          {product.name}
-        </h3>
-
-        <div className="mt-3 flex items-center justify-between gap-3">
           <div>
-            <p className="text-lg font-bold">
-              {money(Number(product.price || 0))}
+            <p className="text-sm font-semibold">
+              Contact
             </p>
 
-            {product.originalPrice ? (
-              <p className="text-xs text-neutral-400 line-through">
-                {money(Number(product.originalPrice))}
-              </p>
-            ) : null}
-          </div>
+            <div className="mt-4 grid gap-3 text-sm text-neutral-500">
+              <span className="flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                WhatsApp / Call
+              </span>
 
-          <button
-            type="button"
-            onClick={addToCart}
-            className="rounded-full bg-black px-4 py-2 text-xs font-semibold text-white dark:bg-white dark:text-black"
+              <span>
+                {(contactConfig as any)?.email ||
+                  "Jao Lab Fashion & Styles"}
+              </span>
+
+              <span className="flex items-center gap-2">
+                <InstagramIcon className="h-4 w-4" />
+                @raymonjao0
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-black/10 px-4 py-5 text-center text-xs text-neutral-500 dark:border-white/10">
+          © {new Date().getFullYear()} Jao Lab Fashion &amp;
+          Styles. All rights reserved.
+        </div>
+      </footer>
+
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/10 bg-white/95 px-4 py-2 backdrop-blur-xl dark:border-white/10 md:hidden">
+        <div className="mx-auto flex max-w-md items-center justify-around">
+          <Link
+            href="/"
+            className="flex flex-col items-center gap-1 p-2 text-[10px]"
           >
-            Add
-          </button>
+            <HomeIcon className="h-5 w-5" />
+            Home
+          </Link>
+
+          <Link
+            href="/shop"
+            className="flex flex-col items-center gap-1 p-2 text-[10px]"
+          >
+            <Search className="h-5 w-5" />
+            Shop
+          </Link>
+
+          <Link
+            href="/wishlist"
+            className="flex flex-col items-center gap-1 p-2 text-[10px]"
+          >
+            <Heart className="h-5 w-5" />
+            Wishlist
+          </Link>
+
+          <Link
+            href="/account"
+            className="flex flex-col items-center gap-1 p-2 text-[10px]"
+          >
+            <UserRound className="h-5 w-5" />
+            Account
+          </Link>
         </div>
       </div>
     </div>
   );
 }
 
+function ProductCard({
+  product,
+  onWishlist,
+}: {
+  product: any;
+  onWishlist?: () => void;
+}) {
+  const [liked, setLiked] = useState(false);
+  const { message, show } = useNotice();
+
+  const addToCart = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    // The card sits inside a link, so stop the click from navigating.
+    event.preventDefault();
+    event.stopPropagation();
+
+    addProductToCart(product.id);
+    show("Added to cart");
+  };
+
+  return (
+    <>
+      <div className="group overflow-hidden rounded-3xl border border-black/10 bg-white dark:border-white/10 dark:bg-neutral-950">
+        <div className="relative aspect-[4/5] overflow-hidden bg-neutral-100 dark:bg-neutral-900">
+          <img
+            src={img(product)}
+            alt={product.name}
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+          />
+
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setLiked((value) => !value);
+              onWishlist?.();
+            }}
+            className="absolute right-3 top-3 rounded-full bg-white/90 p-2 shadow-sm backdrop-blur dark:bg-black/70"
+            aria-label="Wishlist"
+          >
+            <Heart
+              className={`h-5 w-5 ${
+                liked ? "fill-current" : ""
+              }`}
+            />
+          </button>
+
+          {product.discount ? (
+            <div className="absolute left-3 top-3 rounded-full bg-black px-3 py-1 text-xs font-semibold text-white">
+              -{product.discount}%
+            </div>
+          ) : null}
+        </div>
+
+        <div className="p-4">
+          <p className="mb-1 text-xs uppercase tracking-[0.18em] text-neutral-500">
+            JAO LAB
+          </p>
+
+          <h3 className="line-clamp-2 min-h-[2.8rem] text-sm font-semibold">
+            {product.name}
+          </h3>
+
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-bold">
+                {money(Number(product.price || 0))}
+              </p>
+
+              {product.originalPrice ? (
+                <p className="text-xs text-neutral-400 line-through">
+                  {money(Number(product.originalPrice))}
+                </p>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              onClick={addToCart}
+              className="rounded-full bg-black px-4 py-2 text-xs font-semibold text-white dark:bg-white dark:text-black"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <Notice message={message} />
+    </>
+  );
+}
+
 function Home() {
   const { data, isLoading, error } = useGetHome();
 
-  const featured = data?.featured || [];
-  const newest = data?.newest || [];
-  const categories = data?.categories || [];
+  const homeData: any = data;
+  const featured: Product[] = homeData?.featured || [];
+  const newest: Product[] = homeData?.newest || [];
+  const categories: Category[] = homeData?.categories || [];
 
   return (
     <Shell>
@@ -665,7 +734,7 @@ function Home() {
         </section>
 
         <section className="mx-auto max-w-7xl px-4 py-12 md:px-6">
-          <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-3xl border border-black/10 p-6 dark:border-white/10">
               <Sparkles className="h-6 w-6" />
               <h3 className="mt-4 font-bold">
@@ -827,15 +896,17 @@ function Home() {
       </main>
     </Shell>
   );
-        }
-  function Shop() {
+}
+
+function Shop() {
   const [search, setSearch] = useState("");
 
   const { data, isLoading, error } = useListProducts();
 
-  const products = Array.isArray(data)
-    ? data
-    : data?.items || data?.products || [];
+  const raw: any = data;
+  const products: any[] = Array.isArray(raw)
+    ? raw
+    : raw?.items || raw?.products || [];
 
   const filtered = products.filter((product: Product) =>
     product.name
@@ -908,37 +979,19 @@ function Home() {
 }
 
 function ProductPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams() as unknown as { id?: string };
+  const id = params.id || "";
 
-  const { data: product, isLoading, error } = useGetProduct(
-    id,
-  );
+  const { data, isLoading, error } = useGetProduct(id);
+  const { message, show } = useNotice();
+
+  const product: any = data;
 
   const addToCart = () => {
     if (!product) return;
 
-    const existing = JSON.parse(
-      localStorage.getItem("jao-cart") || "[]",
-    ) as Array<{
-      productId: string;
-      quantity: number;
-    }>;
-
-    const found = existing.find(
-      (item) => item.productId === product.id,
-    );
-
-    if (found) {
-      found.quantity += 1;
-    } else {
-      existing.push({
-        productId: product.id,
-        quantity: 1,
-      });
-    }
-
-    localStorage.setItem("jao-cart", JSON.stringify(existing));
-    window.dispatchEvent(new Event("jao-cart-updated"));
+    addProductToCart(product.id);
+    show("Added to cart");
   };
 
   if (isLoading) {
@@ -950,91 +1003,94 @@ function ProductPage() {
   }
 
   if (error || !product) {
-          if (error || !product) {
-        return (
-          <Shell>
-            <QueryError />
-          </Shell>
-        );
-      }
+    return (
+      <Shell>
+        <QueryError />
+      </Shell>
+    );
+  }
 
-      return (
-        <Shell>
-          <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
-            <div className="grid gap-10 md:grid-cols-2">
-              <div className="overflow-hidden rounded-[2rem] bg-neutral-100 dark:bg-neutral-900">
-                <img
-                  src={img(product)}
-                  alt={product.name}
-                  className="aspect-square h-full w-full object-cover"
-                />
+  return (
+    <Shell>
+      <Notice message={message} />
+
+      <main className="mx-auto max-w-7xl px-4 py-10 md:px-6 md:py-14">
+        <div className="grid gap-10 md:grid-cols-2">
+          <div className="overflow-hidden rounded-[2rem] bg-neutral-100 dark:bg-neutral-900">
+            <img
+              src={img(product)}
+              alt={product.name}
+              className="aspect-square h-full w-full object-cover"
+            />
+          </div>
+
+          <div className="flex flex-col justify-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
+              JAO LAB
+            </p>
+
+            <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
+              {product.name}
+            </h1>
+
+            <p className="mt-5 text-3xl font-bold">
+              {money(Number(product.price || 0))}
+            </p>
+
+            {product.description ? (
+              <p className="mt-6 text-sm leading-7 text-neutral-600 dark:text-neutral-400">
+                {product.description}
+              </p>
+            ) : null}
+
+            <div className="mt-8 grid gap-3">
+              <button
+                type="button"
+                onClick={addToCart}
+                className="flex h-12 items-center justify-center gap-2 rounded-full bg-black px-6 text-sm font-semibold text-white dark:bg-white dark:text-black"
+              >
+                <ShoppingBag className="h-5 w-5" />
+                Add to cart
+              </button>
+
+              <button
+                type="button"
+                className="flex h-12 items-center justify-center gap-2 rounded-full border border-black/10 px-6 text-sm font-semibold dark:border-white/10"
+              >
+                Start Installment Plan
+              </button>
+            </div>
+
+            <div className="mt-8 grid gap-3 border-t border-black/10 pt-6 text-sm dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="h-5 w-5" />
+                Secure shopping
               </div>
 
-              <div className="flex flex-col justify-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
-                  JAO LAB
-                </p>
+              <div className="flex items-center gap-3">
+                <Truck className="h-5 w-5" />
+                Delivery available
+              </div>
 
-                <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
-                  {product.name}
-                </h1>
-
-                <p className="mt-5 text-3xl font-bold">
-                  {money(Number(product.price || 0))}
-                </p>
-
-                {product.description ? (
-                  <p className="mt-6 text-sm leading-7 text-neutral-600 dark:text-neutral-400">
-                    {product.description}
-                  </p>
-                ) : null}
-
-                <div className="mt-8 grid gap-3">
-                  <button
-                    type="button"
-                    onClick={addToCart}
-                    className="flex h-12 items-center justify-center gap-2 rounded-full bg-black px-6 text-sm font-semibold text-white dark:bg-white dark:text-black"
-                  >
-                    <ShoppingBag className="h-5 w-5" />
-                    Add to cart
-                  </button>
-
-                  <button
-                    type="button"
-                    className="flex h-12 items-center justify-center gap-2 rounded-full border border-black/10 px-6 text-sm font-semibold dark:border-white/10"
-                  >
-                    Start Installment Plan
-                  </button>
-                </div>
-
-                <div className="mt-8 grid gap-3 border-t border-black/10 pt-6 text-sm dark:border-white/10">
-                  <div className="flex items-center gap-3">
-                    <ShieldCheck className="h-5 w-5" />
-                    Secure shopping
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Truck className="h-5 w-5" />
-                    Delivery available
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <CreditCard className="h-5 w-5" />
-                    Flexible payment options
-                  </div>
-                </div>
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-5 w-5" />
+                Flexible payment options
               </div>
             </div>
-          </main>
-        </Shell>
-      );
-        }
-  function CategoriesPage() {
+          </div>
+        </div>
+      </main>
+    </Shell>
+  );
+}
+
+function CategoriesPage() {
   const { data, isLoading, error } = useListCategories();
 
-  const categories = Array.isArray(data)
-    ? data
-    : data?.items || data?.categories || [];
+  const raw: any = data;
+  const categories: Category[] = Array.isArray(raw)
+    ? raw
+    : raw?.items || raw?.categories || [];
 
   return (
     <Shell>
@@ -1090,9 +1146,10 @@ function ProductPage() {
 function WishlistPage() {
   const { data, isLoading, error } = useGetWishlist();
 
-  const items = Array.isArray(data)
-    ? data
-    : data?.items || data?.products || [];
+  const raw: any = data;
+  const items: any[] = Array.isArray(raw)
+      ? raw
+    : raw?.items || raw?.products || [];
 
   return (
     <Shell>
@@ -1137,9 +1194,10 @@ function WishlistPage() {
 function OrdersPage() {
   const { data, isLoading, error } = useListOrders();
 
-  const orders = Array.isArray(data)
-    ? data
-    : data?.items || data?.orders || [];
+  const raw: any = data;
+  const orders: Order[] = Array.isArray(raw)
+    ? raw
+    : raw?.items || raw?.orders || [];
 
   return (
     <Shell>
@@ -1241,36 +1299,31 @@ function OrdersPage() {
       </main>
     </Shell>
   );
-                  }
-  function CartPage() {
-  const [cart, setCart] = useState<
-    Array<{
-      productId: string;
-      quantity: number;
-    }>
-  >([]);
+}
 
-  const [products, setProducts] = useState<Product[]>([]);
+function CartPage() {
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadCart = async () => {
       try {
-        const saved = JSON.parse(
-          localStorage.getItem("jao-cart") || "[]",
-        ) as Array<{
-          productId: string;
-          quantity: number;
-        }>;
+        const saved = readCart();
 
         setCart(saved);
 
-        const results: Product[] = [];
+        const results: any[] = [];
 
         for (const item of saved) {
           try {
+            const apiBase =
+              (import.meta as any).env?.VITE_API_URL ||
+              "https://jao-lab-fashion-api.onrender.com";
+
             const response = await fetch(
-              `${import.meta.env.VITE_API_URL || "https://jao-lab-fashion-api.onrender.com"}/products/${item.productId}`,
+              `${apiBase}/products/${item.productId}`,
             );
 
             if (response.ok) {
@@ -1292,12 +1345,12 @@ function OrdersPage() {
   }, []);
 
   const updateQuantity = (
-    productId: string,
+    productId: string | number,
     quantity: number,
   ) => {
     const next = cart
       .map((item) =>
-        item.productId === productId
+        String(item.productId) === String(productId)
           ? {
               ...item,
               quantity,
@@ -1311,13 +1364,13 @@ function OrdersPage() {
     window.dispatchEvent(new Event("jao-cart-updated"));
   };
 
-  const removeItem = (productId: string) => {
+  const removeItem = (productId: string | number) => {
     updateQuantity(productId, 0);
   };
 
   const total = cart.reduce((sum, item) => {
     const product = products.find(
-      (p) => p.id === item.productId,
+      (p) => String(p.id) === String(item.productId),
     );
 
     return (
@@ -1371,7 +1424,7 @@ function OrdersPage() {
             <div className="grid gap-4">
               {cart.map((item) => {
                 const product = products.find(
-                  (p) => p.id === item.productId,
+                  (p) => String(p.id) === String(item.productId),
                 );
 
                 if (!product) return null;
@@ -1499,6 +1552,31 @@ function OrdersPage() {
   );
 }
 
+function RequireAuth({ children }: { children: ReactNode }) {
+  const auth: any = useAuth();
+
+  const authLoading = Boolean(auth?.isLoading ?? auth?.loading);
+  const signedIn = Boolean(
+    auth?.user ?? auth?.isAuthenticated ?? auth?.token,
+  );
+
+  if (authLoading) {
+    return (
+      <Shell>
+        <Loading />
+      </Shell>
+    );
+  }
+
+  if (!signedIn) {
+    return <Redirect to="/login" />;
+  }
+      <Route path="/admin" component={AdminPage} />
+
+
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Switch>
@@ -1568,11 +1646,14 @@ export default function App() {
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
-          <WouterRouter>
-            <AppRoutes />
-          </WouterRouter>
+          <ErrorBoundary>
+            <WouterRouter>
+              <AppRoutes />
+            </WouterRouter>
+          </ErrorBoundary>
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
-    }
+                    }
+      
