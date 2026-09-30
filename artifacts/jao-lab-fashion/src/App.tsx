@@ -496,8 +496,11 @@ function Shell({
       </Link>
     </div>
   </div>
-</div>
-    function ProductCard({
+  </div>
+);
+
+}
+function ProductCard({
   product,
   onWishlist,
 }: {
